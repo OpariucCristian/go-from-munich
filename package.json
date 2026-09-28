@@ -1,0 +1,35 @@
+{
+  "name": "gofrommunich",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "test": "node --env-file-if-exists=.env node_modules/vitest/vitest.mjs run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "migrate": "tsx --env-file=.env packages/db/src/migrate.ts",
+    "worker": "tsx --env-file=.env apps/worker/src/cli.ts",
+    "api": "tsx --env-file=.env apps/api/src/server.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "@types/node-cron": "^3.0.11",
+    "@types/pg": "^8.23.1",
+    "@types/pg-copy-streams": "^1.2.5",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  },
+  "dependencies": {
+    "@duckdb/node-api": "^1.5.5-r.5",
+    "date-holidays": "^3.37.0",
+    "fast-xml-parser": "^5.11.1",
+    "fastify": "^5.12.5",
+    "node-cron": "^4.6.0",
+    "onnxruntime-node": "^1.30.0",
+    "pg": "^8.23.0",
+    "pg-copy-streams": "^7.0.0",
+    "tsx": "^4.23.15"
+  }
+}

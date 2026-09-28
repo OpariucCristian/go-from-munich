@@ -1,0 +1,7 @@
+lightgbm==4.6.0
+numpy>=2.0,<3
+pandas>=2.2,<3
+scikit-learn>=1.5,<2
+onnx>=1.17
+onnxmltools>=1.13
+onnxruntime>=1.20

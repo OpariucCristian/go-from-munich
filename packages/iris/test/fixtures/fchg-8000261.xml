@@ -1,0 +1,18 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- Synthetic fixture following the IRIS schema; replace with a captured response once API keys are available. -->
+<timetable station='München Hbf' eva='8000261'>
+  <s id="2686007473625185344-2609281501-1" eva="8000261">
+    <m id="r1" t="d" c="36" ts="2609281450"/>
+    <dp ct="2609281509"/>
+  </s>
+  <s id="-7033045110854920488-2609281045-17" eva="8000261">
+    <ar ct="2609281601" cp="22"><m id="r2" t="d" c="43" ts="2609281400"/></ar>
+  </s>
+  <s id="-2611277419625750949-2609281435-4" eva="8000261">
+    <ar cs="c" clt="2609281400"/>
+    <dp cs="c" clt="2609281400"/>
+  </s>
+  <s id="777-2609281540-1" eva="8000261">
+    <dp cs="p" ct="2609281540"/>
+  </s>
+</timetable>
