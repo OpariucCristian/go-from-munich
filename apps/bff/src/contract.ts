@@ -62,6 +62,25 @@ export interface StopView {
   confidence: Confidence;
   live: LiveView | null;
   sighting: SightingView | null;
+  /** What went into this forecast, most direct first: live sighting, weather, history. */
+  signals: SignalView[];
+  /** Delay reasons DB reported for this train's run today. Not model inputs (yet). */
+  reasons: ReasonView[];
+}
+
+/** One input the forecast used, e.g. { title: 'Seen running', text: 'Based on +12 min at Augsburg Hbf, 40 min earlier' }. */
+export interface SignalView {
+  kind: 'live' | 'weather' | 'history';
+  title: string;
+  text: string;
+  /** 'warn' when the signal points to delays (running late, severe weather, thin history). */
+  tone: 'neutral' | 'warn';
+}
+
+export interface ReasonView {
+  kind: 'cause' | 'announcement';
+  text: string; // 'Delay of a train ahead'
+  detail: string; // 'Reported at Augsburg Hbf, 16:40 · 3 stops'
 }
 
 export interface LegView {

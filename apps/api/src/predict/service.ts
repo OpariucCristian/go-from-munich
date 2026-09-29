@@ -53,10 +53,101 @@ export function describe(p: StopPrediction) {
     sighting: p.sighting
       ? { eva: p.sighting.eva, name: p.sighting.name, delayMin: p.sighting.delayMin, gapMin: p.sighting.gapMin, planned: p.sighting.planned.toISOString() }
       : null,
+    // The weather a model scored this stop with (null when no model used weather for it).
+    weather: p.weather ? mapValues(p.weather, (v) => (Number.isFinite(v) ? Math.round(v * 10) / 10 : null)) : null,
   };
 }
 
 const round = (x: number) => Math.round(x * 10000) / 10000;
+const mapValues = <K extends string, V, W>(o: Record<K, V>, f: (v: V) => W) =>
+  Object.fromEntries(Object.entries(o).map(([k, v]) => [k, f(v as V)])) as Record<K, W>;
+
+/** A delay reason or announcement DB attached to a train's run. */
+export interface RunReason {
+  kind: 'cause' | 'announcement';
+  text: string;
+  /** Where it was last reported, and when. */
+  station: string | null;
+  reportedAt: string;
+  /** How many stops of the run carried it. */
+  stops: number;
+}
+
+export interface MessageRow {
+  trip_id: string;
+  eva: string;
+  name: string | null;
+  type: string;
+  code: number | null;
+  category: string | null;
+  at: Date;
+}
+
+/** HIM announcement categories worth showing; plain 'Information' says nothing about delays. */
+const ANNOUNCEMENTS: Record<string, string> = {
+  Störung: 'disruption on the line',
+  Bauarbeiten: 'construction work on the line',
+};
+
+/**
+ * One entry per distinct reason (DB repeats a cause at every stop it affects), latest first.
+ * Unknown codes and uninformative announcements are dropped.
+ */
+export function reasonsOf(rows: MessageRow[]): RunReason[] {
+  const byKey = new Map<string, { kind: RunReason['kind']; text: string; last: MessageRow; stops: Set<string> }>();
+  for (const r of rows) {
+    const kind = r.type === 'd' ? 'cause' : 'announcement';
+    const text = kind === 'cause' ? delayCauseText(r.code) : r.category ? ANNOUNCEMENTS[r.category] : undefined;
+    if (!text) continue;
+    const key = `${kind}|${text}`;
+    const cur = byKey.get(key);
+    if (!cur) byKey.set(key, { kind, text, last: r, stops: new Set([r.eva]) });
+    else {
+      cur.stops.add(r.eva);
+      if (r.at > cur.last.at) cur.last = r;
+    }
+  }
+  return [...byKey.values()]
+    .sort((a, b) => b.last.at.getTime() - a.last.at.getTime())
+    .map((x) => ({
+      kind: x.kind,
+      text: x.text,
+      station: x.last.name ?? x.last.eva,
+      reportedAt: x.last.at.toISOString(),
+      stops: x.stops.size,
+    }));
+}
+
+/**
+ * Reasons for each queried stop's run: the live trip is found by its planned time at that stop
+ * (like liveStatus), and every message of the trip counts, whichever stop DB attached it to.
+ */
+export async function runReasons(queries: StopQuery[]): Promise<RunReason[][]> {
+  if (!queries.length) return [];
+  const pool = getPool();
+  const { rows: trips } = await pool.query<{ i: string; trip_id: string }>(
+    `SELECT DISTINCT q.i::text, e.trip_id::text
+     FROM unnest($1::text[], $2::text[], $3::text[], $4::timestamptz[]) WITH ORDINALITY AS q(tt, tn, eva, planned, i)
+     JOIN stop_events e ON e.eva = q.eva AND e.source = 'live'
+      AND e.service_date BETWEEN (q.planned - interval '1 day')::date AND q.planned::date
+      AND (e.planned_arr = q.planned OR e.planned_dep = q.planned)
+     JOIN trips t ON t.id = e.trip_id AND t.train_type = q.tt AND t.train_number = q.tn`,
+    [queries.map((q) => q.trainType), queries.map((q) => q.trainNumber), queries.map((q) => q.eva), queries.map((q) => q.planned)],
+  );
+  const tripOf = new Map(trips.map((r) => [Number(r.i) - 1, r.trip_id]));
+  const ids = [...new Set(tripOf.values())];
+  if (!ids.length) return queries.map(() => []);
+  const { rows } = await pool.query<MessageRow>(
+    `SELECT m.trip_id::text, m.eva, s.name, m.type, m.code, m.category, coalesce(m.ts, m.first_seen) AS at
+     FROM stop_messages m LEFT JOIN stations s ON s.eva = m.eva
+     WHERE m.trip_id = ANY($1::bigint[])
+       AND ((m.type = 'd' AND m.code > 0) OR (m.type = 'h' AND m.category = ANY($2::text[])))`,
+    [ids, Object.keys(ANNOUNCEMENTS)],
+  );
+  const byTrip = new Map<string, RunReason[]>();
+  for (const id of ids) byTrip.set(id, reasonsOf(rows.filter((r) => r.trip_id === id)));
+  return queries.map((_, i) => byTrip.get(tripOf.get(i) ?? '') ?? []);
+}
 
 export async function liveStatus(
   leg: Pick<LegInput, 'trainType' | 'trainNumber'>,

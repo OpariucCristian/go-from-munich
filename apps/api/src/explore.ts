@@ -6,7 +6,7 @@
 import type { FastifyInstance } from 'fastify';
 import { normalizeEva, type CityConfig } from '@gfm/core';
 import { getPool } from '@gfm/db';
-import { ATTRIBUTION, describe, liveStatus, type Predictor } from './predict/service.ts';
+import { ATTRIBUTION, describe, liveStatus, runReasons, type Predictor } from './predict/service.ts';
 
 const LONG_DISTANCE = ['ICE', 'IC', 'EC', 'ECE', 'RJ', 'RJX', 'NJ', 'EN', 'TGV'];
 
@@ -97,9 +97,10 @@ export function registerExploreRoutes(app: FastifyInstance, city: CityConfig, pr
         event: s.event,
         planned: new Date(s.planned),
       }));
-      const [preds, live] = await Promise.all([
+      const [preds, live, reasons] = await Promise.all([
         predictor().predict(queries),
         Promise.all(queries.map((q) => liveStatus(q, q.eva, q.event, q.planned))),
+        runReasons(queries),
       ]);
       return queries.map((q, i) => ({
         eva: q.eva,
@@ -107,6 +108,7 @@ export function registerExploreRoutes(app: FastifyInstance, city: CityConfig, pr
         planned: q.planned.toISOString(),
         live: live[i],
         prediction: describe(preds[i]!),
+        reasons: reasons[i],
       }));
     },
   );

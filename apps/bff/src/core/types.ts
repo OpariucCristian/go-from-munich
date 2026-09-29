@@ -8,6 +8,29 @@ export interface CorePrediction {
   support: { level: number; observations: number };
   /** Where the train was last seen before this stop, when that changed the prediction. */
   sighting?: CoreSighting | null;
+  /** The weather a model scored this stop with; null when no model used weather for it. */
+  weather?: CoreWeather | null;
+}
+
+/** °C, mm and cm over the last 3 hours, km/h; null where unknown. */
+export interface CoreWeather {
+  tempC: number | null;
+  precip3h: number | null;
+  snow3h: number | null;
+  gustKmh: number | null;
+  regionTempMin: number | null;
+  regionPrecip3hMax: number | null;
+  regionSnow3hMax: number | null;
+  regionGustMax: number | null;
+}
+
+/** A delay reason or announcement DB attached to the train's run. */
+export interface CoreReason {
+  kind: 'cause' | 'announcement';
+  text: string;
+  station: string | null;
+  reportedAt: string;
+  stops: number;
 }
 
 export interface CoreSighting {
@@ -31,6 +54,8 @@ export interface CoreStopPrediction {
   planned: string;
   live: CoreLive | null;
   prediction: CorePrediction;
+  /** Absent from older core APIs. */
+  reasons?: CoreReason[];
 }
 
 export interface CoreLeg {

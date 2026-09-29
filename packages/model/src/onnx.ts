@@ -13,7 +13,7 @@ import { BaselinePredictor, type StopPrediction } from './baseline.ts';
 import { FEATURE_NAMES, buildFeatures, originStartToDate, type FeatureContext, type StopExtras } from './features.ts';
 import type { StopQuery } from './groups.ts';
 import { applyNowcast, loadNowcastStats, loadSightings } from './nowcast.ts';
-import { loadWeather, weatherFeatures } from './weather.ts';
+import { loadWeather, snapshotFeatures, weatherSnapshot } from './weather.ts';
 
 export async function loadOnnxSession(modelPath: string): Promise<ort.InferenceSession> {
   return ort.InferenceSession.create(modelPath, { intraOpNumThreads: 2 });
@@ -125,11 +125,12 @@ export class OnnxPredictor {
     const withSighting = (b: StopPrediction, i: number) => (sightings[i] ? { ...b, sighting: sightings[i]! } : b);
     try {
       const scored = queries.flatMap((_, i) => (this.opts.appliesTo !== 'sighted' || sightings[i] ? [i] : []));
+      const wx = new Map(scored.map((i) => [i, weatherSnapshot(queries[i]!.planned, weather, this.homePoint)]));
       const rows = scored.map((i) =>
         buildFeatures(
           queries[i]!,
           stacked[i]!,
-          { ...extras[i]!, sighting: sightings[i], weather: weatherFeatures(queries[i]!.planned, weather, this.homePoint) },
+          { ...extras[i]!, sighting: sightings[i], weather: snapshotFeatures(wx.get(i)!) },
           this.ctx,
         ),
       );
@@ -141,7 +142,7 @@ export class OnnxPredictor {
         if (!o) return withSighting(b, i);
         const distribution =
           this.opts.stacking === 'logit-offset' ? stackLogitOffset(b.distribution, o, this.opts.refFloor) : normalize(o);
-        return withSighting({ ...base[i]!, distribution }, i);
+        return withSighting({ ...base[i]!, distribution, weather: wx.get(i)! }, i);
       });
     } catch (err) {
       console.error('[onnx] scoring failed, using baseline + nowcast', err);
