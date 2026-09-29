@@ -1,6 +1,10 @@
 /**
  * Serves the LightGBM model exported to ONNX. Features come from the same `buildFeatures` used
  * for training export. Falls back to the baseline distribution for any row the model can't score.
+ *
+ * Two kinds of model: standalone ones output probabilities; "logit-offset" ones (trained on RPS
+ * starting from the reference, see ml/train.py) output raw tree scores that are added to the log
+ * of the served-without-LightGBM distribution (baseline + nowcast).
  */
 import * as ort from 'onnxruntime-node';
 import { NUM_BUCKETS, normalize, type CityConfig } from '@gfm/core';
@@ -15,7 +19,7 @@ export async function loadOnnxSession(modelPath: string): Promise<ort.InferenceS
   return ort.InferenceSession.create(modelPath, { intraOpNumThreads: 2 });
 }
 
-/** Run the session on a row-major feature matrix; returns one probability vector per row. */
+/** Run the session on a row-major feature matrix; returns one output vector per row (probabilities or raw scores). */
 export async function runOnnx(session: ort.InferenceSession, rows: number[][]): Promise<number[][]> {
   const n = rows.length;
   const width = FEATURE_NAMES.length;
@@ -25,6 +29,28 @@ export async function runOnnx(session: ort.InferenceSession, rows: number[][]): 
   const probsName = session.outputNames.find((o) => o.includes('prob')) ?? session.outputNames[1]!;
   const probs = out[probsName]!.data as Float32Array;
   return Array.from({ length: n }, (_, i) => Array.from(probs.subarray(i * NUM_BUCKETS, (i + 1) * NUM_BUCKETS)));
+}
+
+export type Stacking = 'none' | 'logit-offset';
+
+/** Which stops the model corrects: all, or only those with a live sighting (the rest keep the reference). */
+export type AppliesTo = 'all' | 'sighted';
+
+export interface OnnxOptions {
+  stacking?: Stacking;
+  refFloor?: number;
+  appliesTo?: AppliesTo;
+}
+
+/** softmax(log ref + raw), with the reference floored and renormalised exactly as in training. */
+export function stackLogitOffset(ref: number[], raw: number[], floor = 1e-6): number[] {
+  const floored = ref.map((p) => Math.max(p, floor));
+  const total = floored.reduce((a, b) => a + b, 0);
+  const z = floored.map((p, k) => Math.log(p / total) + raw[k]!);
+  const top = Math.max(...z);
+  const e = z.map((v) => Math.exp(v - top));
+  const sum = e.reduce((a, b) => a + b, 0);
+  return e.map((v) => v / sum);
 }
 
 /** Stop sequence and origin start for the latest known run of each queried train at that station. */
@@ -65,13 +91,20 @@ export class OnnxPredictor {
     private readonly session: ort.InferenceSession,
     private readonly baseline: BaselinePredictor,
     city: CityConfig,
+    private readonly opts: OnnxOptions = {},
   ) {
     this.ctx = { trainTypes: city.trainTypes, hubEvas: new Set(city.hubs.map((h) => h.eva)), tz: city.tz };
     this.homePoint = city.weatherPoints[0]?.id ?? '';
   }
 
-  static async load(version: string, modelPath: string, city: CityConfig): Promise<OnnxPredictor> {
-    return new OnnxPredictor(version, await loadOnnxSession(modelPath), new BaselinePredictor('baseline-v1', undefined, city.tz), city);
+  static async load(
+    version: string,
+    modelPath: string,
+    city: CityConfig,
+    opts: OnnxOptions = {},
+  ): Promise<OnnxPredictor> {
+    const baseline = new BaselinePredictor('baseline-v1', undefined, city.tz);
+    return new OnnxPredictor(version, await loadOnnxSession(modelPath), baseline, city, opts);
   }
 
   async predict(queries: StopQuery[], now = new Date()): Promise<StopPrediction[]> {
@@ -89,15 +122,30 @@ export class OnnxPredictor {
     const stacked = base.map((b, i) =>
       sightings[i] ? { ...b, distribution: applyNowcast(b.distribution, queries[i]!, sightings[i]!, nowcast) } : b,
     );
+    const withSighting = (b: StopPrediction, i: number) => (sightings[i] ? { ...b, sighting: sightings[i]! } : b);
     try {
-      const rows = queries.map((q, i) =>
-        buildFeatures(q, stacked[i]!, { ...extras[i]!, sighting: sightings[i], weather: weatherFeatures(q.planned, weather, this.homePoint) }, this.ctx),
+      const scored = queries.flatMap((_, i) => (this.opts.appliesTo !== 'sighted' || sightings[i] ? [i] : []));
+      const rows = scored.map((i) =>
+        buildFeatures(
+          queries[i]!,
+          stacked[i]!,
+          { ...extras[i]!, sighting: sightings[i], weather: weatherFeatures(queries[i]!.planned, weather, this.homePoint) },
+          this.ctx,
+        ),
       );
-      const probs = await runOnnx(this.session, rows);
-      return base.map((b, i) => ({ ...b, distribution: normalize(probs[i]!), ...(sightings[i] ? { sighting: sightings[i]! } : {}) }));
+      const out = rows.length ? await runOnnx(this.session, rows) : [];
+      const byIdx = new Map(scored.map((i, n) => [i, out[n]!]));
+      return stacked.map((b, i) => {
+        const o = byIdx.get(i);
+        // Rows the model does not correct keep the reference (baseline + nowcast).
+        if (!o) return withSighting(b, i);
+        const distribution =
+          this.opts.stacking === 'logit-offset' ? stackLogitOffset(b.distribution, o, this.opts.refFloor) : normalize(o);
+        return withSighting({ ...base[i]!, distribution }, i);
+      });
     } catch (err) {
       console.error('[onnx] scoring failed, using baseline + nowcast', err);
-      return stacked.map((b, i) => (sightings[i] ? { ...b, sighting: sightings[i]! } : b));
+      return stacked.map(withSighting);
     }
   }
 }

@@ -181,7 +181,12 @@ The estimate page shows the latest cause next to the live delay (`packages/core/
 **LightGBM features v3.** The model inputs include the sighting (`seen_delay_min`, `seen_gap_min`) and the weather:
 - Half the training rows get a random "now" 5–240 minutes before the stop, and the sighting found at that moment by `sightingsForRuns`. That is the same lookup serving uses, so historical sightings train the model on the kind of input it will see live.
 - A model trained this way uses sightings itself, and the nowcast layer is switched off for it.
-- Validation rows also carry `ref_p*`, what is served without LightGBM (baseline + nowcast). A model is only promoted if it beats that.
+- Rows also carry `ref_p*`, what is served without LightGBM (baseline + nowcast). A model is only promoted if it beats that on the validation weeks.
+- **Training objective (`ml/train.py`, default `--objective rps`).** Boosting starts from `log ref_p` (`init_score`) and minimises RPS directly through a custom objective (`ml/rps_objective.py`), early-stopping on RPS. Round 0 is exactly what is served today, and the trees only learn corrections. The ONNX file outputs the raw tree scores; serving computes `softmax(log ref + scores)` (`stackLogitOffset`, enabled by `"stacking": "logit-offset"` in `metrics.json`). `--objective multiclass --rows all` keeps the older standalone model.
+- **Defaults** are the best configuration from `ml/sweep.py`:
+  - the trees only correct stops with a live sighting (`--rows sighted`, `"appliesTo": "sighted"`); other stops are served the reference unchanged;
+  - weather features are left out of the trees (`--drop-features`): they learned period-specific shifts that did not carry over to later weeks;
+  - small, heavily regularised trees (15 leaves, 5000 rows per leaf, L2 50, learning rate 0.02).
 - Models are trained on a PC and shipped with `scripts/model-deploy.sh <version>`; the VM never trains.
 
 ## Deployment (Oracle Cloud Ampere, arm64)
@@ -251,6 +256,19 @@ All figures are on the held-out last 4 weeks.
 - LightGBM again wins on log loss but not RPS, so the lookup tables stay in service.
 - The model's most-used new inputs are the sighting delay and the temperature.
 - Delay-cause messages are the next candidate feature once `stop_messages` has several weeks of data.
+
+**Update 2026-09-29, RPS objective.** Same validation weeks (400k rows, 57k with a sighting):
+
+| | RPS ↓ | sighted | unsighted | log loss ↓ |
+|---|---|---|---|---|
+| Baseline + nowcast tables (reference) | 0.1048 | 0.0932 | 0.1067 | 1.323 |
+| RPS objective, all rows, with weather | 0.1053 | 0.0928 | 0.1073 | 1.324 |
+| RPS objective, all rows, no weather | 0.1049 | 0.0905 | 0.1072 | – |
+| **RPS objective, sighted rows only, no weather (`lgbm-muc-202609291703`)** | **0.1043** | **0.0898** | 0.1067 | **1.319** |
+
+- Starting from the reference and optimising RPS fixed the log-loss/RPS mismatch. The gain is on stops with a live sighting (−3.6%), where the trees combine the sighting with station, hour and route position better than the lookup tables.
+- On stops without a sighting every configuration got slightly worse on the validation weeks, so the model leaves them alone.
+- Caveat: restricting to sighted rows was decided after seeing the per-slice validation numbers; the weather and tree settings were chosen on the early-stopping weeks only.
 
 Lessons from getting here:
 - Early stopping must hold out a whole time chunk.

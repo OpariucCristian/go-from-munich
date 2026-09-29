@@ -9,7 +9,7 @@ import { getPool, withTransaction } from '@gfm/db';
 import { BaselinePredictor, type StopPrediction } from './baseline.ts';
 import { FEATURE_VERSION } from './features.ts';
 import { NowcastLayer } from './nowcast.ts';
-import { OnnxPredictor } from './onnx.ts';
+import { OnnxPredictor, type AppliesTo, type Stacking } from './onnx.ts';
 import type { StopQuery } from './groups.ts';
 
 export interface ServingPredictor {
@@ -20,6 +20,11 @@ export interface ServingPredictor {
 
 export interface TrainMetrics {
   featureVersion?: number;
+  /** "logit-offset": the ONNX output is added to the log reference (see ml/train.py). */
+  stacking?: Stacking;
+  refFloor?: number;
+  /** "sighted": the model only corrects stops with a live sighting. */
+  appliesTo?: AppliesTo;
   lgbm: { rps: number; logLoss: number; n: number };
   baseline: { rps: number; logLoss: number; n: number };
   /** What is served without LightGBM (baseline + live nowcast) on the same rows, when exported. */
@@ -86,8 +91,13 @@ export async function loadActivePredictor(city: CityConfig): Promise<ServingPred
 }
 
 async function loadActiveModel(city: CityConfig): Promise<{ predictor: ServingPredictor; id: number | null }> {
-  const { rows } = await getPool().query<{ id: number; kind: string; version: string; artifact_path: string | null; feature_version: number | null }>(
-    `SELECT id, kind, version, artifact_path, (metrics->>'featureVersion')::int AS feature_version
+  const { rows } = await getPool().query<{
+    id: number; kind: string; version: string; artifact_path: string | null; feature_version: number | null;
+    stacking: Stacking | null; ref_floor: number | null; applies_to: AppliesTo | null;
+  }>(
+    `SELECT id, kind, version, artifact_path, (metrics->>'featureVersion')::int AS feature_version,
+            metrics->>'stacking' AS stacking, (metrics->>'refFloor')::float8 AS ref_floor,
+            metrics->>'appliesTo' AS applies_to
      FROM models WHERE is_active`,
   );
   const active = rows[0];
@@ -95,7 +105,12 @@ async function loadActiveModel(city: CityConfig): Promise<{ predictor: ServingPr
     console.error(`[registry] ${active.version} was trained on features v${active.feature_version}, serving v${FEATURE_VERSION}: using the baseline`);
   } else if (active?.kind === 'lgbm' && active.artifact_path) {
     try {
-      return { predictor: await OnnxPredictor.load(active.version, active.artifact_path, city), id: active.id };
+      const opts = {
+        stacking: active.stacking ?? 'none',
+        refFloor: active.ref_floor ?? undefined,
+        appliesTo: active.applies_to ?? 'all',
+      };
+      return { predictor: await OnnxPredictor.load(active.version, active.artifact_path, city, opts), id: active.id };
     } catch (err) {
       console.error(`[registry] failed to load ${active.artifact_path}, falling back to baseline`, err);
     }
