@@ -7,9 +7,12 @@
  *   refresh-stats                          rebuild agg_delay_stats
  *   nightly                                run the nightly pipeline once
  *   train                                  export features, train LightGBM, register/promote
+ *   register-model --dir models/<version>  register a trained model (e.g. shipped from another machine); promote if it wins
  *   backtest [--days 28]                   score the baseline on the last N days
  *   refresh-nowcast                        rebuild agg_nowcast_stats (live-delay tables)
  *   backtest-nowcast [--days 28] [--date]  score the live-delay nowcast against the baseline, by gap
+ *   weather-backfill [--from --to]         Open-Meteo archive weather, YYYY-MM-DD (default 2024-06-01..yesterday)
+ *   weather-forecast                       fetch the current weather forecast
  *   snapshot                               freeze predictions for stops planned in the next 13h
  *   score [--date YYYY-MM-DD | --all]      score a day's snapshots (default: finished, unscored days; --all rescores everything)
  *   replay-accuracy [--days 28]            seed accuracy history by replaying past days (no look-ahead)
@@ -26,9 +29,18 @@ import { Poller } from './poller.ts';
 import { refreshStats } from './stats.ts';
 import { runNightly, startAccuracySchedule, startScheduler } from './nightly.ts';
 import { replayAccuracy, rescoreAll, scoreDay, scorePending, snapshotPredictions } from './accuracy.ts';
-import { trainAndPromote } from './train.ts';
-import { backtestBaseline, backtestNowcast, labelledDataEnd, refreshNowcastStats } from '@gfm/model';
-import { polledStations } from '@gfm/core';
+import path from 'node:path';
+import { repoRoot, trainAndPromote } from './train.ts';
+import { weatherBackfill, weatherForecast } from './weather.ts';
+import {
+  backtestBaseline,
+  backtestNowcast,
+  fullRunDataEnd,
+  labelledDataEnd,
+  refreshNowcastStats,
+  registerAndMaybePromote,
+} from '@gfm/model';
+import { scoredStations } from '@gfm/core';
 
 const { positionals, values } = parseArgs({
   allowPositionals: true,
@@ -39,6 +51,7 @@ const { positionals, values } = parseArgs({
     days: { type: 'string', default: '28' },
     date: { type: 'string' },
     all: { type: 'boolean', default: false },
+    dir: { type: 'string' },
   },
 });
 
@@ -70,6 +83,12 @@ async function main() {
     case 'train':
       console.log(JSON.stringify(await trainAndPromote(city), null, 2));
       break;
+    case 'register-model': {
+      if (!values.dir) throw new Error('--dir models/<version> is required');
+      const dir = path.resolve(repoRoot, values.dir);
+      console.log(JSON.stringify(await registerAndMaybePromote(dir, path.basename(dir)), null, 2));
+      break;
+    }
     case 'backtest': {
       const days = Number(values.days);
       const r = await backtestBaseline({ cutoff: new Date((await labelledDataEnd()).getTime() - days * 86400_000), days, tz: city.tz, evas: city.hubs.map((h) => h.eva) });
@@ -82,12 +101,20 @@ async function main() {
     case 'backtest-nowcast': {
       const days = Number(values.days);
       // --date YYYY-MM-DD ends the test window there (e.g. the end of the full-run history).
-      const end = values.date ? new Date(`${values.date}T00:00:00Z`) : await labelledDataEnd();
+      const end = values.date ? new Date(`${values.date}T00:00:00Z`) : await fullRunDataEnd();
       const cutoff = new Date(end.getTime() - days * 86400_000);
-      const r = await backtestNowcast({ cutoff, days, tz: city.tz, evas: polledStations(city).map((s) => s.eva) });
+      const r = await backtestNowcast({ cutoff, days, tz: city.tz, evas: scoredStations(city).map((s) => s.eva) });
       console.log(JSON.stringify(r, null, 2));
       break;
     }
+    case 'weather-backfill': {
+      const yesterday = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
+      console.log(JSON.stringify(await weatherBackfill(city, values.from ?? '2024-06-01', values.to ?? yesterday)));
+      break;
+    }
+    case 'weather-forecast':
+      console.log(JSON.stringify(await weatherForecast(city)));
+      break;
     case 'snapshot':
       console.log(JSON.stringify(await snapshotPredictions(city)));
       break;
@@ -114,7 +141,7 @@ async function main() {
       await new Poller(city).run();
       return;
     default:
-      console.error('Usage: worker <backfill|import-latest|poll|refresh-stats|nightly|train|backtest|refresh-nowcast|backtest-nowcast|snapshot|score|replay-accuracy|run> [--city muc]');
+      console.error('Usage: worker <backfill|import-latest|poll|refresh-stats|nightly|train|register-model|backtest|refresh-nowcast|backtest-nowcast|weather-backfill|weather-forecast|snapshot|score|replay-accuracy|run> [--city muc]');
       process.exitCode = 1;
   }
   await closePool();

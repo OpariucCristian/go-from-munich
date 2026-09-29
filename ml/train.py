@@ -48,12 +48,13 @@ def evaluate(probs: np.ndarray, labels: np.ndarray) -> dict:
     }
 
 
-def load(path: Path, features: list[str]) -> tuple[np.ndarray, np.ndarray]:
+def load(path: Path, features: list[str], ref_cols: list[str]) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
     df = pd.read_csv(path)
     missing = [f for f in features if f not in df.columns]
     if missing:
         raise SystemExit(f"{path}: missing feature columns {missing}")
-    return df[features].to_numpy(dtype=np.float32), df["label"].to_numpy(dtype=np.int64)
+    ref = df[ref_cols].to_numpy(dtype=np.float64) if ref_cols and all(c in df.columns for c in ref_cols) else None
+    return df[features].to_numpy(dtype=np.float32), df["label"].to_numpy(dtype=np.int64), ref
 
 
 def export_onnx(model: lgb.LGBMClassifier, n_features: int, path: Path) -> None:
@@ -81,8 +82,10 @@ def main() -> None:
 
     meta = json.loads((args.data / "meta.json").read_text())
     features: list[str] = meta["features"]
-    X, y = load(args.data / "train.csv", features)
-    Xv, yv = load(args.data / "valid.csv", features)
+    # Reference columns: what is served without LightGBM (baseline + live nowcast), per row.
+    ref_cols: list[str] = meta.get("reference", {}).get("columns", [])
+    X, y, _ = load(args.data / "train.csv", features, [])
+    Xv, yv, ref_v = load(args.data / "valid.csv", features, ref_cols)
     print(f"train {X.shape}, valid {Xv.shape}")
 
     # Chunks are written in time order. Early-stop on the newest *whole* training chunks: a row
@@ -142,12 +145,14 @@ def main() -> None:
         "chunks": meta["chunks"],
         "lgbm": evaluate(probs, yv),
         "baseline": evaluate(base_probs, yv),
+        **({"reference": evaluate(ref_v / ref_v.sum(axis=1, keepdims=True), yv)} if ref_v is not None else {}),
         "featureImportance": [{"feature": f, "gain": round(g, 1)} for f, g in importance],
     }
     (args.out / "metrics.json").write_text(json.dumps(metrics, indent=2))
     print(json.dumps({k: metrics[k] for k in ("bestIteration", "trainSeconds")}))
-    print(f"valid RPS  lgbm={metrics['lgbm']['rps']:.5f}  baseline={metrics['baseline']['rps']:.5f}")
-    print(f"valid LL   lgbm={metrics['lgbm']['logLoss']:.4f}  baseline={metrics['baseline']['logLoss']:.4f}")
+    ref = metrics.get("reference", metrics["baseline"])
+    print(f"valid RPS  lgbm={metrics['lgbm']['rps']:.5f}  baseline={metrics['baseline']['rps']:.5f}  reference={ref['rps']:.5f}")
+    print(f"valid LL   lgbm={metrics['lgbm']['logLoss']:.4f}  baseline={metrics['baseline']['logLoss']:.4f}  reference={ref['logLoss']:.4f}")
 
 
 if __name__ == "__main__":

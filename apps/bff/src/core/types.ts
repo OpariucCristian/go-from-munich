@@ -6,12 +6,23 @@ export interface CorePrediction {
   cancelled: number;
   minutes: { expected: number; median: number; p10: number; p80: number; p90: number };
   support: { level: number; observations: number };
+  /** Where the train was last seen before this stop, when that changed the prediction. */
+  sighting?: CoreSighting | null;
+}
+
+export interface CoreSighting {
+  eva: string;
+  name: string | null;
+  delayMin: number;
+  gapMin: number;
+  planned: string;
 }
 
 export interface CoreLive {
   delayMin: number | null;
   cancelled: boolean;
   observedAt: string | null;
+  cause?: string | null;
 }
 
 export interface CoreStopPrediction {
@@ -139,13 +150,13 @@ export interface CoreCalibrationBin {
 }
 
 export interface CoreAccuracy {
-  source: 'live' | 'replay' | 'all';
+  source: 'live' | 'replay' | 'all' | 'near';
   from: string | null;
   to: string | null;
   total: (CoreAccuracyMetrics & { green: number | null }) | null;
   daily: (CoreAccuracyMetrics & {
     date: string;
-    source: 'live' | 'replay';
+    source: 'live' | 'replay' | 'near';
     modelVersions: string[];
     unlabelled: number;
     /** Share of green (<20% risk) predictions that were really ≤5 min late. */
@@ -156,7 +167,7 @@ export interface CoreAccuracy {
   models: { version: string; n: number }[];
   misses: {
     date: string;
-    source: 'live' | 'replay';
+    source: 'live' | 'replay' | 'near';
     trainType: string;
     trainNumber: string;
     eva: string;

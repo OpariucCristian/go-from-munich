@@ -37,6 +37,15 @@ export interface LiveView {
   cancelled: boolean;
   label: string; // '+7 now', 'cancelled', 'on time now'
   observedAt: string | null;
+  /** DB's stated cause of the delay, e.g. 'Construction work'. */
+  cause: string | null;
+}
+
+/** The live sighting a prediction is based on, e.g. 'Based on +12 min at Augsburg Hbf, 40 min earlier'. */
+export interface SightingView {
+  name: string;
+  delayMin: number;
+  label: string;
 }
 
 export interface StopView {
@@ -52,6 +61,7 @@ export interface StopView {
   dist: DistributionView;
   confidence: Confidence;
   live: LiveView | null;
+  sighting: SightingView | null;
 }
 
 export interface LegView {
@@ -173,7 +183,8 @@ export interface TrainStopsView {
   stops: { eva: string; name: string; time: string }[];
 }
 
-export type AccuracySource = 'live' | 'replay' | 'all';
+/** 'near': predictions frozen 30–90 min before the stop, when live sightings of the train count. */
+export type AccuracySource = 'live' | 'replay' | 'all' | 'near';
 
 export interface AccuracyStat {
   key: 'green' | 'within80' | 'skill' | 'miss';
@@ -186,7 +197,7 @@ export interface AccuracyStat {
 export interface AccuracyDay {
   date: string; // YYYY-MM-DD
   label: string; // '5 Aug'
-  source: 'live' | 'replay';
+  source: 'live' | 'replay' | 'near';
   n: number;
   /** 1 − RPS / climatology RPS: how much better than a forecast that ignores train, station and time. */
   skill: number | null;
@@ -227,7 +238,7 @@ export interface AccuracyMiss {
   time: string; // planned, HH:MM
   predicted: string; // 'Likely +1 · 9% risk'
   actual: string; // '+34 min' | 'Cancelled'
-  source: 'live' | 'replay';
+  source: 'live' | 'replay' | 'near';
 }
 
 export interface AccuracyView {

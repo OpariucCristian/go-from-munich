@@ -2,7 +2,9 @@
  * Accuracy tracking.
  *
  *  snapshotPredictions  hourly: freeze the active model's prediction for every in-scope stop the
- *                       first time it appears in the live plan (~12h ahead)
+ *                       first time it appears in the live plan (~12h ahead, source 'live'), and
+ *                       again 30–90 min before it (source 'near'), when a live sighting of the
+ *                       train can already shape the prediction (see nowcast.ts)
  *  scoreDay             compare a day's frozen predictions with the observed delays and store
  *                       per-row outcomes plus a daily aggregate in `accuracy_daily`
  *  scorePending         score every finished day that still has unscored live snapshots
@@ -13,7 +15,7 @@ import {
   CANCELLED_BUCKET,
   bucketOf,
   normalize,
-  polledStations,
+  scoredStations,
   toLocalParts,
   type CityConfig,
   type Distribution,
@@ -39,7 +41,9 @@ import type pg from 'pg';
 import { finaliseLiveEvents } from './nightly.ts';
 
 type Db = Pick<pg.Pool, 'query'>;
-type Source = 'live' | 'replay';
+type Source = 'live' | 'replay' | 'near';
+/** Sources frozen from live data and scored by the daily job. */
+const LIVE_SOURCES = ['live', 'near'] as const;
 
 const BATCH = 2000;
 const DAY_MS = 86400_000;
@@ -88,12 +92,14 @@ async function insertSnapshots(db: Db, rows: StopRow[], preds: StopPrediction[],
   const r = await db.query(
     `INSERT INTO prediction_snapshots
        (service_date, trip_id, eva, event, train_type, train_number, planned, lead_min, dist, support_level,
-        source, predicted_at, model_id, model_kind, model_version)
+        sighting_eva, sighting_delay, sighting_gap_min, source, predicted_at, model_id, model_kind, model_version)
      SELECT u.service_date, u.trip_id, u.eva, u.event, u.train_type, u.train_number, u.planned, u.lead_min,
-            u.dist::real[], u.support_level, $11, $12, $13, $14, $15
+            u.dist::real[], u.support_level, u.sighting_eva, u.sighting_delay, u.sighting_gap_min,
+            $14, $15, $16, $17, $18
      FROM unnest($1::date[], $2::bigint[], $3::text[], $4::char(1)[], $5::text[], $6::text[],
-                 $7::timestamptz[], $8::int[], $9::text[], $10::smallint[])
-          AS u(service_date, trip_id, eva, event, train_type, train_number, planned, lead_min, dist, support_level)
+                 $7::timestamptz[], $8::int[], $9::text[], $10::smallint[], $11::text[], $12::int[], $13::int[])
+          AS u(service_date, trip_id, eva, event, train_type, train_number, planned, lead_min, dist, support_level,
+               sighting_eva, sighting_delay, sighting_gap_min)
      ON CONFLICT DO NOTHING`,
     [
       rows.map((r) => r.service_date),
@@ -106,6 +112,9 @@ async function insertSnapshots(db: Db, rows: StopRow[], preds: StopPrediction[],
       rows.map((r) => Math.round((r.planned.getTime() - meta.predictedAt.getTime()) / 60_000)),
       preds.map((p) => `{${p.distribution.join(',')}}`),
       preds.map((p) => p.supportLevel),
+      preds.map((p) => p.sighting?.eva ?? null),
+      preds.map((p) => p.sighting?.delayMin ?? null),
+      preds.map((p) => p.sighting?.gapMin ?? null),
       meta.source,
       meta.predictedAt,
       meta.modelId,
@@ -120,28 +129,37 @@ export async function snapshotPredictions(city: CityConfig) {
   const finish = await startJob('snapshot', city.id);
   try {
     const predictor = await loadActivePredictor(city);
-    const { rows } = await getPool().query<StopRow>(
-      stopsSql(`
-        e.service_date BETWEEN current_date - 1 AND current_date + 1
-        AND ev.planned > now() AND ev.planned <= now() + interval '13 hours'
-        AND NOT EXISTS (SELECT 1 FROM prediction_snapshots p
-                        WHERE p.service_date = e.service_date AND p.trip_id = e.trip_id AND p.eva = e.eva
-                          AND p.event = ev.event AND p.source = 'live')`),
-      [polledStations(city).map((s) => s.eva), city.trainTypes],
-    );
-    let inserted = 0;
-    for (let i = 0; i < rows.length; i += BATCH) {
-      const batch = rows.slice(i, i + BATCH);
-      const preds = await predictor.predict(batch.map(toQuery));
-      inserted += await insertSnapshots(getPool(), batch, preds, {
-        source: 'live',
-        predictedAt: new Date(),
-        modelId: predictor.id,
-        modelKind: predictor.kind,
-        modelVersion: predictor.version,
-      });
+    // 'live': everything newly planned up to 13h ahead. 'near': stops 30–90 min away; the job runs
+    // hourly, so each stop is caught once in that window.
+    const windows: { source: Source; from: string; to: string }[] = [
+      { source: 'live', from: '0 minutes', to: '13 hours' },
+      { source: 'near', from: '30 minutes', to: '90 minutes' },
+    ];
+    const out: Record<string, number | string> = { model: predictor.version };
+    for (const w of windows) {
+      const { rows } = await getPool().query<StopRow>(
+        stopsSql(`
+          e.service_date BETWEEN current_date - 1 AND current_date + 1
+          AND ev.planned > now() + $3::interval AND ev.planned <= now() + $4::interval
+          AND NOT EXISTS (SELECT 1 FROM prediction_snapshots p
+                          WHERE p.service_date = e.service_date AND p.trip_id = e.trip_id AND p.eva = e.eva
+                            AND p.event = ev.event AND p.source = $5)`),
+        [scoredStations(city).map((s) => s.eva), city.trainTypes, w.from, w.to, w.source],
+      );
+      let inserted = 0;
+      for (let i = 0; i < rows.length; i += BATCH) {
+        const batch = rows.slice(i, i + BATCH);
+        const preds = await predictor.predict(batch.map(toQuery));
+        inserted += await insertSnapshots(getPool(), batch, preds, {
+          source: w.source,
+          predictedAt: new Date(),
+          modelId: predictor.id,
+          modelKind: predictor.kind,
+          modelVersion: predictor.version,
+        });
+      }
+      out[w.source] = inserted;
     }
-    const out = { snapshots: inserted, model: predictor.version };
     await finish('ok', out);
     return out;
   } catch (err) {
@@ -256,7 +274,7 @@ export function lastFinishedDay(tz: string, now = new Date()): string {
 }
 
 /**
- * Scores every finished day that still has unscored live snapshots. A service day counts as
+ * Scores every finished day that still has unscored live or near snapshots. A service day counts as
  * finished from 06:30 local the next morning. `rescoreDays` also rescores the most recent
  * finished days to pick up labels that arrived late.
  */
@@ -266,15 +284,15 @@ export async function scorePending(city: CityConfig, opts: { rescoreDays?: numbe
   try {
     const finalise = await finaliseLiveEvents();
     const lastFinished = lastFinishedDay(city.tz, now);
-    const { rows } = await getPool().query<{ d: string }>(
-      `SELECT DISTINCT service_date::text AS d FROM prediction_snapshots
-       WHERE source = 'live' AND service_date <= $1
+    const { rows } = await getPool().query<{ d: string; source: Source }>(
+      `SELECT DISTINCT service_date::text AS d, source FROM prediction_snapshots
+       WHERE source = ANY($3) AND service_date <= $1
          AND (scored_at IS NULL OR service_date > $1::date - $2::int)
-       ORDER BY 1`,
-      [lastFinished, opts.rescoreDays ?? 0],
+       ORDER BY 1, 2`,
+      [lastFinished, opts.rescoreDays ?? 0, LIVE_SOURCES],
     );
     const days = [];
-    for (const { d } of rows) days.push(await scoreDay(city, d, 'live'));
+    for (const { d, source } of rows) days.push(await scoreDay(city, d, source));
     const out = { finalise, days };
     await finish('ok', out);
     return out;
@@ -293,7 +311,7 @@ export async function scorePending(city: CityConfig, opts: { rescoreDays?: numbe
 export async function replayAccuracy(city: CityConfig, days = 28) {
   const finish = await startJob('replay-accuracy', city.id);
   try {
-    const evas = polledStations(city).map((s) => s.eva);
+    const evas = scoredStations(city).map((s) => s.eva);
     const pool = getPool();
     const { rows: dayRows } = await pool.query<{ d: string; start: Date }>(
       `SELECT d::text, (d::timestamp AT TIME ZONE $3) AS start FROM (

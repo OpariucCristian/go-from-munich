@@ -1,5 +1,5 @@
 /** Formatting and the shared risk scale. All wall-clock output is Europe/Berlin. */
-import type { Confidence, DistributionView, LiveView, Tone } from '../contract.ts';
+import type { Confidence, DistributionView, LiveView, SightingView, Tone } from '../contract.ts';
 import type { CoreLive, CorePrediction } from '../core/types.ts';
 
 export const TZ = 'Europe/Berlin';
@@ -71,7 +71,16 @@ export function confidenceOf(p: CorePrediction, train: string, trainType: string
 export function liveOf(l: CoreLive | null | undefined): LiveView | null {
   if (!l) return null;
   const label = l.cancelled ? 'cancelled' : l.delayMin === null ? 'live' : l.delayMin <= 0 ? 'on time now' : `+${l.delayMin} now`;
-  return { delayMin: l.delayMin, cancelled: l.cancelled, label, observedAt: l.observedAt };
+  const cause = l.cause ? l.cause[0]!.toUpperCase() + l.cause.slice(1) : null;
+  return { delayMin: l.delayMin, cancelled: l.cancelled, label, observedAt: l.observedAt, cause };
+}
+
+export function sightingOf(p: CorePrediction): SightingView | null {
+  const s = p.sighting;
+  if (!s) return null;
+  const name = s.name ?? 'an earlier stop';
+  const seen = s.delayMin <= 2 ? 'on time' : `+${s.delayMin} min`;
+  return { name, delayMin: s.delayMin, label: `Based on ${seen} at ${name}, ${s.gapMin} min earlier` };
 }
 
 export const pct = (p: number) => `${Math.round(p * 100)}%`;

@@ -66,6 +66,21 @@ describe.skipIf(!url)('mergeStaging', () => {
     ).toBe(0);
   });
 
+  it('stores each message once per trip and stop, skipping unknown trips', async () => {
+    const msg = {
+      rideId: '42', originStart: '2609281000', serviceDate: '2026-09-28', eva: '8000261', id: 'r2', event: 'a' as const,
+      type: 'd', code: 31, category: null, validFrom: null, validTo: null, ts: d('2026-09-28T07:50:00Z'),
+      observedAt: d('2026-09-28T07:55:00Z'),
+    };
+    const n = await db.withTransaction((c) =>
+      db.insertStopMessages(c, [msg, { ...msg, id: 'r9', rideId: 'nope' }]),
+    );
+    expect(n).toBe(1);
+    expect(await db.withTransaction((c) => db.insertStopMessages(c, [{ ...msg, observedAt: d('2026-09-28T08:05:00Z') }]))).toBe(0);
+    const { rows } = await pool.query('SELECT type, code, event, first_seen FROM stop_messages');
+    expect(rows).toEqual([{ type: 'd', code: 31, event: 'a', first_seen: d('2026-09-28T07:55:00Z') }]);
+  });
+
   it('lets partial live changes update without erasing planned data, and records observations', async () => {
     const change = {
       ...base, trainType: null, trainNumber: null, finalDestination: null, stopSeq: null,

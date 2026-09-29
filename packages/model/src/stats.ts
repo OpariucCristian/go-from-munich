@@ -34,19 +34,19 @@ export async function buildLabelledEvents(c: pg.PoolClient, opts: StatsOptions =
   await c.query(
     `CREATE TEMP TABLE labelled_events AS
      WITH ev AS (
-       SELECT e.eva, t.train_type, t.train_number, e.stop_seq, t.origin_start, 'a'::char(1) AS event, e.planned_arr AS pt,
+       SELECT e.trip_id, e.service_date, e.eva, t.train_type, t.train_number, e.stop_seq, t.origin_start, 'a'::char(1) AS event, e.planned_arr AS pt,
               e.arr_delay_min AS delay, e.arr_cancelled AS cancelled
        FROM stop_events e JOIN trips t ON t.id = e.trip_id
        WHERE e.planned_arr IS NOT NULL
          AND e.service_date >= ($1::timestamptz - make_interval(days => $2))::date - 1
        UNION ALL
-       SELECT e.eva, t.train_type, t.train_number, e.stop_seq, t.origin_start, 'd'::char(1), e.planned_dep,
+       SELECT e.trip_id, e.service_date, e.eva, t.train_type, t.train_number, e.stop_seq, t.origin_start, 'd'::char(1), e.planned_dep,
               e.dep_delay_min, e.dep_cancelled
        FROM stop_events e JOIN trips t ON t.id = e.trip_id
        WHERE e.planned_dep IS NOT NULL
          AND e.service_date >= ($1::timestamptz - make_interval(days => $2))::date - 1
      )
-     SELECT eva, train_type, train_number, stop_seq, origin_start, event, pt, delay,
+     SELECT trip_id, service_date, eva, train_type, train_number, stop_seq, origin_start, event, pt, delay,
             ${bucketSql('delay', 'cancelled')} AS bucket,
             power(0.5, extract(epoch FROM ($1::timestamptz - pt)) / 86400.0 / $3) AS w,
             ${dayTypeSql(local)} AS day_type,
@@ -111,4 +111,16 @@ export async function labelledDataEnd(): Promise<Date> {
      WHERE service_date >= current_date - 400 AND (dep_delay_min IS NOT NULL OR arr_delay_min IS NOT NULL)`,
   );
   return rows[0]?.d ? new Date(`${rows[0].d}T00:00:00Z`) : new Date();
+}
+
+/**
+ * Start of the day after the newest dataset (piebro) day. Those runs have every stop; live rows
+ * only cover the polled stations, so training exports and nowcast backtests end here.
+ */
+export async function fullRunDataEnd(): Promise<Date> {
+  const { rows } = await getPool().query<{ d: string | null }>(
+    `SELECT (max(service_date) + 1)::text AS d FROM stop_events
+     WHERE service_date >= current_date - 400 AND source = 'piebro'`,
+  );
+  return rows[0]?.d ? new Date(`${rows[0].d}T00:00:00Z`) : labelledDataEnd();
 }

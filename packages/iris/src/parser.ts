@@ -17,7 +17,26 @@ import { normalizeEva, parseIrisStopId, parseIrisTime } from '@gfm/core';
 import type { StopEventInput } from '@gfm/db';
 
 type Attrs = Record<string, string | undefined>;
-type XmlStop = Attrs & { tl?: Attrs; ar?: Attrs; dp?: Attrs };
+type XmlEvent = Attrs & { m?: Attrs[] };
+type XmlStop = Attrs & { tl?: Attrs; ar?: XmlEvent; dp?: XmlEvent; m?: Attrs[] };
+
+/**
+ * A message on a stop (`event` null) or on its arrival/departure. Types: d = delay cause and
+ * q = quality note (numeric `code`), h = announcement (HIM, `category`), r = disruption.
+ */
+export interface StopMessage {
+  id: string;
+  event: 'a' | 'd' | null;
+  type: string;
+  code: number | null;
+  category: string | null;
+  validFrom: Date | null;
+  validTo: Date | null;
+  ts: Date | null;
+}
+
+/** Message types worth keeping; free text (f) and connection notes (c) carry nothing usable. */
+const KEPT_MESSAGE_TYPES = new Set(['d', 'q', 'h', 'r']);
 
 /**
  * A parsed stop plus the planned route through it: `path` holds the station names before and
@@ -25,7 +44,7 @@ type XmlStop = Attrs & { tl?: Attrs; ar?: Attrs; dp?: Attrs };
  * doesn't name the station or carries no path, e.g. most change rows). Changed paths (`cpth`,
  * diversions) win over planned ones (`ppth`).
  */
-export type ParsedStop = StopEventInput & { path: string[]; route: string[] | null };
+export type ParsedStop = StopEventInput & { path: string[]; route: string[] | null; messages: StopMessage[] };
 
 const xml = new XMLParser({
   ignoreAttributes: false,
@@ -47,6 +66,23 @@ function splitPath(ppth: string | undefined): string[] {
 
 function lastOfPath(ppth: string | undefined): string | null {
   return splitPath(ppth).at(-1) ?? null;
+}
+
+function messagesOf(list: Attrs[] | undefined, event: StopMessage['event'], tz: string): StopMessage[] {
+  return (list ?? []).flatMap((m) =>
+    m.id && m.t && KEPT_MESSAGE_TYPES.has(m.t)
+      ? [{
+          id: m.id,
+          event,
+          type: m.t,
+          code: m.c !== undefined && /^\d+$/.test(m.c) ? Number(m.c) : null,
+          category: m.cat ?? null,
+          validFrom: parseIrisTime(m.from, tz),
+          validTo: parseIrisTime(m.to, tz),
+          ts: parseIrisTime(m.ts, tz),
+        }]
+      : [],
+  );
 }
 
 export interface ParseOptions {
@@ -102,6 +138,7 @@ export function parseTimetable(body: string, opts: ParseOptions): ParsedStop[] {
       observedAt: opts.observedAt,
       path: [...before, ...after],
       route: stationName && (before.length || after.length) ? [...before, stationName, ...after] : null,
+      messages: [...messagesOf(s.m, null, tz), ...messagesOf(ar?.m, 'a', tz), ...messagesOf(dp?.m, 'd', tz)],
     });
   }
   return out;

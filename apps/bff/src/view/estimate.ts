@@ -9,6 +9,7 @@ import {
   durationLabel,
   liveOf,
   pct,
+  sightingOf,
   signedMin,
   timeOf,
   toneOf,
@@ -48,6 +49,7 @@ export function stopView(s: TimelineStop, trainType: string, trainNumber: string
     dist,
     confidence: confidenceOf(p.prediction, `${trainType} ${trainNumber}`, trainType),
     live: liveOf(p.live),
+    sighting: sightingOf(p.prediction),
   };
 }
 

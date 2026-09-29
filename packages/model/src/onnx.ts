@@ -8,6 +8,8 @@ import { getPool } from '@gfm/db';
 import { BaselinePredictor, type StopPrediction } from './baseline.ts';
 import { FEATURE_NAMES, buildFeatures, originStartToDate, type FeatureContext, type StopExtras } from './features.ts';
 import type { StopQuery } from './groups.ts';
+import { applyNowcast, loadNowcastStats, loadSightings } from './nowcast.ts';
+import { loadWeather, weatherFeatures } from './weather.ts';
 
 export async function loadOnnxSession(modelPath: string): Promise<ort.InferenceSession> {
   return ort.InferenceSession.create(modelPath, { intraOpNumThreads: 2 });
@@ -53,7 +55,10 @@ async function loadExtras(queries: StopQuery[], tz: string): Promise<StopExtras[
 
 export class OnnxPredictor {
   readonly kind = 'lgbm';
+  /** Live sightings are model inputs (features v3), so no separate nowcast layer on top. */
+  readonly usesSightings = true;
   private readonly ctx: FeatureContext;
+  private readonly homePoint: string;
 
   constructor(
     readonly version: string,
@@ -62,21 +67,37 @@ export class OnnxPredictor {
     city: CityConfig,
   ) {
     this.ctx = { trainTypes: city.trainTypes, hubEvas: new Set(city.hubs.map((h) => h.eva)), tz: city.tz };
+    this.homePoint = city.weatherPoints[0]?.id ?? '';
   }
 
   static async load(version: string, modelPath: string, city: CityConfig): Promise<OnnxPredictor> {
     return new OnnxPredictor(version, await loadOnnxSession(modelPath), new BaselinePredictor('baseline-v1', undefined, city.tz), city);
   }
 
-  async predict(queries: StopQuery[]): Promise<StopPrediction[]> {
-    const [base, extras] = await Promise.all([this.baseline.predict(queries), loadExtras(queries, this.ctx.tz)]);
+  async predict(queries: StopQuery[], now = new Date()): Promise<StopPrediction[]> {
+    if (!queries.length) return [];
+    const times = queries.map((q) => q.planned.getTime());
+    const [base, extras, sightings, weather] = await Promise.all([
+      this.baseline.predict(queries),
+      loadExtras(queries, this.ctx.tz),
+      loadSightings(queries, now, this.ctx.tz),
+      loadWeather(getPool(), new Date(Math.min(...times)), new Date(Math.max(...times))),
+    ]);
+    // As in the training export: sighted stops start from the baseline with the nowcast applied.
+    const sighted = queries.flatMap((q, i) => (sightings[i] ? [{ q, sighting: sightings[i]! }] : []));
+    const nowcast = sighted.length ? await loadNowcastStats(sighted) : new Map();
+    const stacked = base.map((b, i) =>
+      sightings[i] ? { ...b, distribution: applyNowcast(b.distribution, queries[i]!, sightings[i]!, nowcast) } : b,
+    );
     try {
-      const rows = queries.map((q, i) => buildFeatures(q, base[i]!, extras[i]!, this.ctx));
+      const rows = queries.map((q, i) =>
+        buildFeatures(q, stacked[i]!, { ...extras[i]!, sighting: sightings[i], weather: weatherFeatures(q.planned, weather, this.homePoint) }, this.ctx),
+      );
       const probs = await runOnnx(this.session, rows);
-      return base.map((b, i) => ({ ...b, distribution: normalize(probs[i]!) }));
+      return base.map((b, i) => ({ ...b, distribution: normalize(probs[i]!), ...(sightings[i] ? { sighting: sightings[i]! } : {}) }));
     } catch (err) {
-      console.error('[onnx] scoring failed, using baseline', err);
-      return base;
+      console.error('[onnx] scoring failed, using baseline + nowcast', err);
+      return stacked.map((b, i) => (sightings[i] ? { ...b, sighting: sightings[i]! } : b));
     }
   }
 }

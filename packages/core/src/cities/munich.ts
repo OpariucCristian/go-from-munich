@@ -22,5 +22,24 @@ export const munich: CityConfig = {
     { eva: '8000217', name: 'Landshut (Bay) Hbf' },
     { eva: '8000170', name: 'Ulm Hbf' },
   ],
+  // Seen before they reach the corridor: Rosenheim traffic from Austria, Augsburg/Nürnberg
+  // traffic from Stuttgart and Würzburg. EVAs from the IRIS station lookup.
+  upstream: [
+    { eva: '8100002', name: 'Salzburg Hbf' },
+    { eva: '8100001', name: 'Kufstein' },
+    { eva: '8000096', name: 'Stuttgart Hbf' },
+    { eva: '8000260', name: 'Würzburg Hbf' },
+  ],
+  // The city plus the main lines' approaches, for local and "worst along the way" weather.
+  weatherPoints: [
+    { id: 'muc', lat: 48.1402, lon: 11.5586 },
+    { id: 'aug', lat: 48.3655, lon: 10.8856 },
+    { id: 'nue', lat: 49.4456, lon: 11.0825 },
+    { id: 'ing', lat: 48.7445, lon: 11.4372 },
+    { id: 'rgb', lat: 49.0117, lon: 12.0996 },
+    { id: 'ros', lat: 47.85, lon: 12.119 },
+    { id: 'sbg', lat: 47.813, lon: 13.0456 },
+    { id: 'ulm', lat: 48.3994, lon: 9.9829 },
+  ],
   minTransferMin: 6,
 };

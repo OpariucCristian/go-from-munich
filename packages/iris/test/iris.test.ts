@@ -50,6 +50,28 @@ describe('parseTimetable', () => {
     expect(rows[3]).toMatchObject({ depCancelled: false, depStatus: 'p' });
   });
 
+  it('keeps delay causes, quality notes and announcements, dropping free text and connections', () => {
+    const xml = `<timetable station="München Hbf" eva="8000261">
+      <s id="-1234-2609281300-5" eva="8000261">
+        <m id="r1" t="h" from="2609010000" to="2612122359" cat="Information" ts="2608312305" pr="1"/>
+        <ar ct="2609281420">
+          <m id="r2" t="d" c="24" ts="2609281019"/>
+          <m id="r3" t="f" c="0" ts="2609281023"/>
+        </ar>
+        <dp ct="2609281425"><m id="r4" t="q" c="83" ts="2609280334"/><m id="r5" t="c" ts="2609281502"/></dp>
+      </s>
+    </timetable>`;
+    const [row] = parseTimetable(xml, { eva: '8000261', observedAt });
+    expect(row!.messages.map((m) => [m.id, m.event, m.type, m.code])).toEqual([
+      ['r1', null, 'h', null],
+      ['r2', 'a', 'd', 24],
+      ['r4', 'd', 'q', 83],
+    ]);
+    expect(row!.messages[0]).toMatchObject({ category: 'Information' });
+    expect(row!.messages[0]!.validTo?.toISOString()).toBe('2026-12-12T22:59:00.000Z');
+    expect(row!.messages[1]!.ts?.toISOString()).toBe('2026-09-28T08:19:00.000Z');
+  });
+
   it('returns nothing for empty timetables', () => {
     expect(parseTimetable("<timetable station='X'/>", { eva: '1', observedAt })).toEqual([]);
   });

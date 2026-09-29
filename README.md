@@ -66,7 +66,12 @@ docker build -t gfm-trainer ml
 TRAINER=docker npm run worker -- train
 ```
 
-Other worker commands are `poll` (live poller plus the accuracy jobs), `nightly`, `backtest --days 28`, `import-latest`, `snapshot`, `score [--date YYYY-MM-DD]`, `replay-accuracy [--days 28]` and `run` (poller + scheduler, used in production).
+Other worker commands:
+- `poll` (live poller plus the accuracy and weather jobs), `run` (poller + scheduler, used in production), `nightly`, `import-latest`;
+- `backtest --days 28`, `refresh-nowcast`, `backtest-nowcast [--days 28] [--date YYYY-MM-DD]`;
+- `weather-backfill [--from YYYY-MM-DD --to YYYY-MM-DD]`, `weather-forecast`;
+- `snapshot`, `score [--date YYYY-MM-DD]`, `replay-accuracy [--days 28]`;
+- `register-model --dir models/<version>`.
 
 Tests: `npm test`. DB integration tests use `TEST_DATABASE_URL`, which is reset on each run.
 
@@ -138,7 +143,46 @@ Offline backtests re-score history. Accuracy tracking instead records what the a
 - 10 calibration bins;
 - breakdowns by train type, station group, arrival/departure and lead time.
 
-`GET /accuracy?days=30&source=all|live|replay` merges the most recent N scored days. On a date that has both, live wins over replay.
+`GET /accuracy?days=30&source=all|live|replay|near` merges the most recent N scored days. On a date that has both, live wins over replay.
+
+`near` is a second live snapshot per stop, taken 30–90 minutes before it, when a sighting of the train (see [Live signals](#live-signals)) can already shape the prediction. It is scored the same way and shown as "Shortly before" on the Accuracy page. It is never mixed into `all`.
+
+## Live signals
+
+The history tables only know what usually happens. These signals describe today.
+
+**Live-delay nowcast** (`packages/model/src/nowcast.ts`). A *sighting* is the latest stop of the run, planned 5–240 minutes before the target stop and already passed, with a known delay.
+- `agg_nowcast_stats` counts, from the last 180 days of full runs, the delay bucket at a stop given the bucket seen at an earlier stop of the same run and the gap between them. It uses three levels: station + train type, train type, and all trains.
+- The nightly job rebuilds it: about 1 minute locally, 4.5 minutes on the VM.
+- `NowcastLayer` wraps the active model and smooths the matching table into its distribution. Predictions record the sighting they used, and the estimate page says "Based on +12 min at Rosenheim, 47 min earlier".
+- A passed live stop with no reported change counts as on time if the poller was watching that station.
+- Backtest (`backtest-nowcast`, August 2026, 60k stops at the polled stations), RPS baseline → nowcast:
+
+| Gap | 5–15 min | 15–30 | 30–60 | 60–120 | 120–240 |
+|---|---|---|---|---|---|
+| Baseline | 0.103 | 0.105 | 0.117 | 0.142 | 0.162 |
+| + nowcast | **0.040** | **0.051** | **0.070** | **0.098** | **0.132** |
+
+**Upstream stations.** `CityConfig.upstream` (Salzburg Hbf, Kufstein, Stuttgart Hbf, Würzburg Hbf) is polled like the corridor, keeping only trains that pass a Munich hub. These stations only provide earlier sightings; they are not predicted or scored.
+
+**Delay causes.** IRIS messages on live stops go into `stop_messages`:
+- delay causes (type `d`, e.g. code 31 "construction work");
+- quality notes (`q`);
+- announcements (`h`);
+- disruptions (`r`).
+
+The estimate page shows the latest cause next to the live delay (`packages/core/src/reasons.ts`). There is no history of these, so they become model features once several weeks have been collected.
+
+**Weather** (`apps/worker/src/weather.ts`, `packages/model/src/weather.ts`). Hourly data from [Open-Meteo](https://open-meteo.com) (free, no key) for `CityConfig.weatherPoints`, stored in `weather_hourly`:
+- `weather-backfill` loads the archive since 2024-06 in a few seconds;
+- the forecast refreshes hourly at :15, and archive values replace forecast ones daily at 04:00;
+- features cover the city's temperature, 3h rain and snow and gusts, plus the regional worst case.
+
+**LightGBM features v3.** The model inputs include the sighting (`seen_delay_min`, `seen_gap_min`) and the weather:
+- Half the training rows get a random "now" 5–240 minutes before the stop, and the sighting found at that moment by `sightingsForRuns`. That is the same lookup serving uses, so historical sightings train the model on the kind of input it will see live.
+- A model trained this way uses sightings itself, and the nowcast layer is switched off for it.
+- Validation rows also carry `ref_p*`, what is served without LightGBM (baseline + nowcast). A model is only promoted if it beats that.
+- Models are trained on a PC and shipped with `scripts/model-deploy.sh <version>`; the VM never trains.
 
 ## Deployment (Oracle Cloud Ampere, arm64)
 
@@ -148,9 +192,10 @@ docker compose exec worker npx tsx apps/worker/src/cli.ts backfill
 ```
 
 `worker` runs migrations, the live poller and the nightly scheduler:
-- 02:30: finalise live data, refresh stats, backtest, train and promote;
+- 02:30: finalise live data, refresh stats and nowcast tables, backtest, train and promote (unless `DISABLE_TRAINING=1`);
 - 3rd of each month: import new dataset months;
-- hourly at :05: freeze predictions for newly planned stops;
+- hourly at :05: freeze predictions for newly planned stops and for stops 30–90 minutes away;
+- hourly at :15: weather forecast; 04:00: weather archive for the last 10 days;
 - 06:30: score finished days (see [Accuracy tracking](#accuracy-tracking)).
 
 `api` picks up newly promoted models within 5 minutes. `bff` serves the web app and the `/bff` API on port 3000.
@@ -158,7 +203,9 @@ docker compose exec worker npx tsx apps/worker/src/cli.ts backfill
 Current server: an Oracle **Always Free** VM.Standard.A1.Flex in eu-frankfurt-1 (1 OCPU, 6 GB RAM, 47 GB boot disk, Ubuntu 24.04 arm64). The app lives in `~/gofrommunich`.
 
 - **Updates:** `DEPLOY_KEY=<key path> DEPLOY_HOST=ubuntu@<ip> scripts/deploy.sh`. It uploads the working tree (never `.env` or keys), rebuilds, and restarts. The server's `.env` and database stay as they are.
-- **Server `.env`:** the DB API keys, `CITY`, a random `POSTGRES_PASSWORD` and `DISABLE_TRAINING=1`. With that flag the nightly job still refreshes the baseline statistics but skips LightGBM, which is too heavy for 1 OCPU and hasn't beaten the baseline yet.
+- **Server `.env`:** the DB API keys, `CITY`, a random `POSTGRES_PASSWORD` and `DISABLE_TRAINING=1`. With that flag the nightly job still refreshes the baseline and nowcast statistics but skips LightGBM, which is too heavy for 1 OCPU.
+- **Models:** train on a PC (`TRAINER=docker npm run worker -- train`, ideally on a fresh `pg_dump` of the server's DB), then run `DEPLOY_KEY=… DEPLOY_HOST=… scripts/model-deploy.sh <version>`. It copies `model.onnx` and `metrics.json` into the `models` volume and runs `register-model`, which promotes the model only if it beats what is currently served.
+- **Weather history:** after the first deploy, run `docker compose exec worker npx tsx apps/worker/src/cli.ts weather-backfill` once.
 - **Network:** Postgres and the core API listen on localhost only. The Oracle security list only allows SSH. Open the web app through a tunnel, `ssh -i <key> -L 3000:localhost:3000 ubuntu@<ip>`, then http://localhost:3000.
 - **One poller only:** don't run a local poller while the server's is running. They share the DB API keys and the 60 calls/minute limit.
 
@@ -192,6 +239,18 @@ All figures are on the held-out last 4 weeks.
   - nowcast features from the live poller (the train's current delay, the station's delays over the last hours);
   - weather;
   - planned construction work.
+
+**Update 2026-09-29, live signals.** On the same validation weeks, half the rows got a sampled live sighting:
+
+| | RPS ↓ | log loss ↓ | Brier ↓ |
+|---|---|---|---|
+| Baseline | 0.1093 | 1.362 | 0.174 |
+| **Baseline + nowcast tables (active)** | **0.1048** | 1.323 | **0.168** |
+| LightGBM v3 (sightings + weather, stacked on the above) | 0.1068 | **1.307** | 0.171 |
+
+- LightGBM again wins on log loss but not RPS, so the lookup tables stay in service.
+- The model's most-used new inputs are the sighting delay and the temperature.
+- Delay-cause messages are the next candidate feature once `stop_messages` has several weeks of data.
 
 Lessons from getting here:
 - Early stopping must hold out a whole time chunk.

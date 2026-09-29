@@ -6,6 +6,7 @@ import {
   BUCKET_LABELS,
   connectionFailureProbability,
   cumulative,
+  delayCauseText,
   delaySummary,
   minutesBetween,
   type CityConfig,
@@ -36,6 +37,8 @@ export interface LiveStatus {
   delayMin: number | null;
   cancelled: boolean;
   observedAt: string | null;
+  /** Latest delay cause DB gave for this run, e.g. 'construction work'. */
+  cause: string | null;
 }
 
 export function describe(p: StopPrediction) {
@@ -46,6 +49,10 @@ export function describe(p: StopPrediction) {
     cancelled: round(c.cancelled),
     minutes: delaySummary(p.distribution),
     support: { level: p.supportLevel, observations: p.supportN },
+    // The live sighting that shaped this prediction (see @gfm/model nowcast), if any.
+    sighting: p.sighting
+      ? { eva: p.sighting.eva, name: p.sighting.name, delayMin: p.sighting.delayMin, gapMin: p.sighting.gapMin, planned: p.sighting.planned.toISOString() }
+      : null,
   };
 }
 
@@ -58,8 +65,11 @@ export async function liveStatus(
   planned: Date,
 ): Promise<LiveStatus | null> {
   const col = event === 'a' ? 'arr' : 'dep';
-  const { rows } = await getPool().query<{ delay: number | null; cancelled: boolean; observed: Date | null }>(
-    `SELECT e.${col}_delay_min AS delay, e.${col}_cancelled AS cancelled, e.last_observed_at AS observed
+  const { rows } = await getPool().query<{ delay: number | null; cancelled: boolean; observed: Date | null; cause: number | null }>(
+    `SELECT e.${col}_delay_min AS delay, e.${col}_cancelled AS cancelled, e.last_observed_at AS observed,
+            (SELECT m.code FROM stop_messages m
+             WHERE m.trip_id = e.trip_id AND m.type = 'd' AND m.code > 0
+             ORDER BY m.ts DESC NULLS LAST LIMIT 1) AS cause
      FROM stop_events e JOIN trips t ON t.id = e.trip_id
      WHERE t.train_type = $1 AND t.train_number = $2 AND e.eva = $3 AND e.source = 'live'
        AND e.service_date BETWEEN ($4::timestamptz - interval '1 day')::date AND $4::timestamptz::date
@@ -69,7 +79,7 @@ export async function liveStatus(
   );
   const r = rows[0];
   if (!r || (r.delay === null && !r.cancelled)) return null;
-  return { delayMin: r.delay, cancelled: r.cancelled, observedAt: r.observed?.toISOString() ?? null };
+  return { delayMin: r.delay, cancelled: r.cancelled, observedAt: r.observed?.toISOString() ?? null, cause: delayCauseText(r.cause) };
 }
 
 export async function stationNames(evas: string[]): Promise<Map<string, string>> {

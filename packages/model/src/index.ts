@@ -9,3 +9,4 @@ export * from './onnx.ts';
 export * from './registry.ts';
 export * from './accuracy.ts';
 export * from './nowcast.ts';
+export * from './weather.ts';

@@ -4,14 +4,22 @@
  * treats columns as opaque numbers in FEATURE_NAMES order.
  *
  * The model is stacked on the baseline: its first inputs are the baseline's smoothed bucket
- * probabilities, and it learns corrections from calendar and route context.
+ * probabilities, and it learns corrections from calendar and route context, the latest live
+ * sighting of the train (see nowcast.ts) and the weather (see weather.ts).
+ *
+ * v3 added the sighting and weather columns; for sighted stops `base_p*` is the baseline with the
+ * nowcast tables applied, so the model corrects what is served without it. Training rows get a sighting drawn the same way
+ * serving finds one (the latest earlier stop before a sampled "now"), or none, so the model
+ * learns both the far-ahead and the train-already-running case.
  */
 import Holidays from 'date-holidays';
 import { NUM_BUCKETS, isoDate, toLocalParts, zonedToUtc } from '@gfm/core';
 import type { StopPrediction } from './baseline.ts';
 import type { StopQuery } from './groups.ts';
+import type { Sighting } from './nowcast.ts';
+import { WEATHER_FEATURE_NAMES } from './weather.ts';
 
-export const FEATURE_VERSION = 2;
+export const FEATURE_VERSION = 3;
 
 export const FEATURE_NAMES = [
   ...Array.from({ length: NUM_BUCKETS }, (_, i) => `base_p${i}`),
@@ -26,6 +34,9 @@ export const FEATURE_NAMES = [
   'is_hub',
   'stop_seq',
   'minutes_from_origin',
+  'seen_delay_min',
+  'seen_gap_min',
+  ...WEATHER_FEATURE_NAMES,
 ] as const;
 
 export interface FeatureContext {
@@ -38,6 +49,10 @@ export interface StopExtras {
   stopSeq: number | null;
   /** Planned departure at the train's origin, when known. */
   originStart: Date | null;
+  /** Latest live sighting before the stop, if the train is already running. */
+  sighting?: Sighting | null;
+  /** `weatherFeatures()` for the planned hour; NaNs when unknown. */
+  weather?: number[];
 }
 
 const holidays = new Holidays('DE', 'BY');
@@ -84,5 +99,8 @@ export function buildFeatures(q: StopQuery, base: StopPrediction, extras: StopEx
     ctx.hubEvas.has(q.eva) ? 1 : 0,
     extras.stopSeq ?? NaN,
     fromOrigin >= 0 && fromOrigin < 48 * 60 ? fromOrigin : NaN,
+    extras.sighting ? extras.sighting.delayMin : NaN,
+    extras.sighting ? extras.sighting.gapMin : NaN,
+    ...(extras.weather ?? WEATHER_FEATURE_NAMES.map(() => NaN)),
   ];
 }

@@ -42,6 +42,7 @@ const gapBandSql = (gap: string) =>
 /** Where and how late the train was last seen before a target stop. */
 export interface Sighting {
   eva: string;
+  name: string | null;
   delayMin: number;
   /** Planned time of the sighted arrival/departure. */
   planned: Date;
@@ -230,7 +231,7 @@ export async function refreshNowcastStats(opts: NowcastStatsOptions = {}) {
  */
 const sightingLateral = (r: string) => `
   CROSS JOIN LATERAL (
-    SELECT s.eva, s.pt, s.delay FROM (
+    SELECT s.eva, st.name, s.pt, s.delay FROM (
       SELECT e.eva, x.pt, x.cancelled,
              COALESCE(x.delay, CASE WHEN e.source = 'live' AND NOT x.cancelled AND EXISTS (
                SELECT 1 FROM stop_observations o
@@ -243,12 +244,21 @@ const sightingLateral = (r: string) => `
         AND x.pt <= LEAST(${r}.cutoff, ${r}.planned - make_interval(mins => ${MIN_GAP_MIN}))
         AND x.pt >= ${r}.planned - make_interval(mins => ${MAX_GAP_MIN})
     ) s
+    LEFT JOIN stations st ON st.eva = s.eva
     WHERE s.delay IS NOT NULL AND NOT s.cancelled
     ORDER BY s.pt DESC LIMIT 1
   ) s`;
 
-function toSighting(r: { eva: string; pt: Date; delay: number }, planned: Date): Sighting {
-  return { eva: r.eva, delayMin: r.delay, planned: r.pt, gapMin: Math.round((planned.getTime() - r.pt.getTime()) / 60_000) };
+interface SightingRow {
+  i: string;
+  eva: string;
+  name: string | null;
+  pt: Date;
+  delay: number;
+}
+
+function toSighting(r: SightingRow, planned: Date): Sighting {
+  return { eva: r.eva, name: r.name, delayMin: r.delay, planned: r.pt, gapMin: Math.round((planned.getTime() - r.pt.getTime()) / 60_000) };
 }
 
 /**
@@ -260,8 +270,8 @@ export async function sightingsForRuns(
   db: Db = getPool(),
 ): Promise<(Sighting | null)[]> {
   if (!runs.length) return [];
-  const { rows } = await db.query<{ i: string; eva: string; pt: Date; delay: number }>(
-    `SELECT r.i, s.eva, s.pt, s.delay
+  const { rows } = await db.query<SightingRow>(
+    `SELECT r.i, s.eva, s.name, s.pt, s.delay
      FROM unnest($1::bigint[], $2::date[], $3::timestamptz[], $4::timestamptz[]) WITH ORDINALITY
           AS r(trip_id, service_date, planned, cutoff, i)
      ${sightingLateral('r')}`,
@@ -288,7 +298,7 @@ export async function loadSightings(
   const out: (Sighting | null)[] = queries.map(() => null);
   if (!idx.length) return out;
   const sel = idx.map((i) => queries[i]!);
-  const { rows } = await db.query<{ i: string; eva: string; pt: Date; delay: number }>(
+  const { rows } = await db.query<SightingRow>(
     `WITH q AS (
        SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::char(1)[], $5::timestamptz[]) WITH ORDINALITY
               AS q(train_type, train_number, eva, event, planned, i)
@@ -302,7 +312,7 @@ export async function loadSightings(
         AND CASE q.event WHEN 'a' THEN e.planned_arr ELSE e.planned_dep END = q.planned
        ORDER BY q.i, (e.source = 'live') DESC
      )
-     SELECT r.i, s.eva, s.pt, s.delay FROM r ${sightingLateral('r')}`,
+     SELECT r.i, s.eva, s.name, s.pt, s.delay FROM r ${sightingLateral('r')}`,
     [
       sel.map((q) => q.trainType),
       sel.map((q) => q.trainNumber),

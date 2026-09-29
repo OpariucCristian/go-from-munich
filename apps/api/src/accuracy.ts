@@ -16,11 +16,11 @@ import {
   type CalibrationBin,
 } from '@gfm/model';
 
-export type AccuracySource = 'live' | 'replay' | 'all';
+export type AccuracySource = 'live' | 'replay' | 'all' | 'near';
 
 interface DailyRow {
   date: string;
-  source: 'live' | 'replay';
+  source: 'live' | 'replay' | 'near';
   model_version: string;
   n: number;
   n_unlabelled: number;
@@ -61,7 +61,8 @@ export function registerAccuracyRoutes(app: FastifyInstance, city: CityConfig) {
           type: 'object',
           properties: {
             days: { type: 'integer', minimum: 1, maximum: 365, default: 30 },
-            source: { type: 'string', enum: ['live', 'replay', 'all'], default: 'all' },
+            // 'near' = predictions frozen 30–90 min before the stop, when live sightings count.
+            source: { type: 'string', enum: ['live', 'replay', 'all', 'near'], default: 'all' },
           },
         },
       },
@@ -73,7 +74,7 @@ export function registerAccuracyRoutes(app: FastifyInstance, city: CityConfig) {
       const { rows } = await pool.query<DailyRow>(
         `SELECT service_date::text AS date, source, model_version, n, n_unlabelled, n_run, rps, log_loss, brier6,
                 climatology_rps, top_bucket_hit, within80, mae_min, pred_late5, obs_late5, calibration, breakdown
-         FROM accuracy_daily WHERE ($1 = 'all' OR source = $1) ORDER BY service_date`,
+         FROM accuracy_daily WHERE ($1 = 'all' AND source <> 'near') OR source = $1 ORDER BY service_date`,
         [source],
       );
 
@@ -103,9 +104,10 @@ export function registerAccuracyRoutes(app: FastifyInstance, city: CityConfig) {
       const misses = await biggestMisses(picked.map(([date, rs]) => [date, rs[0]!.source]));
       const status = await pool.query<{ pending: number; tracking_since: string | null; last_scored: Date | null }>(
         `SELECT (SELECT count(*)::int FROM prediction_snapshots
-                 WHERE source = 'live' AND scored_at IS NULL AND service_date >= current_date - 7) AS pending,
-                (SELECT min(service_date)::text FROM prediction_snapshots WHERE source = 'live') AS tracking_since,
-                (SELECT max(computed_at) FROM accuracy_daily WHERE source = 'live') AS last_scored`,
+                 WHERE source = $1 AND scored_at IS NULL AND service_date >= current_date - 7) AS pending,
+                (SELECT min(service_date)::text FROM prediction_snapshots WHERE source = $1) AS tracking_since,
+                (SELECT max(computed_at) FROM accuracy_daily WHERE source = $1) AS last_scored`,
+        [source === 'near' ? 'near' : 'live'],
       );
       const s = status.rows[0]!;
       return {
@@ -134,7 +136,7 @@ export function registerAccuracyRoutes(app: FastifyInstance, city: CityConfig) {
  * out: nearly every one scores as a miss (the model rarely gives them more than a few percent), so
  * they would crowd out the informative cases.
  */
-async function biggestMisses(days: [string, 'live' | 'replay'][]) {
+async function biggestMisses(days: [string, 'live' | 'replay' | 'near'][]) {
   if (!days.length) return [];
   const { rows } = await getPool().query<{
     date: string; source: string; train_type: string; train_number: string; eva: string; name: string | null;

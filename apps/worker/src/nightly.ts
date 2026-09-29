@@ -1,17 +1,21 @@
 /**
  * Nightly pipeline (Europe/Berlin):
- *  02:30  finalise yesterday's live stop events, refresh aggregate stats, backtest the baseline,
+ *  02:30  finalise yesterday's live stop events, refresh aggregate and live-delay (nowcast) stats,
+ *         backtest the baseline,
  *         then train LightGBM and promote it if it beats the baseline and the active model
  *  3rd of month 06:00  import newly published dataset months
- *  hourly :05  freeze predictions for newly planned stops; 06:30  score finished days (see accuracy.ts)
+ *  hourly :05  freeze predictions for newly planned stops and for stops 30–90 min away;
+ *              06:30  score finished days (see accuracy.ts)
+ *  hourly :15  weather forecast; 04:00  weather archive for the last 10 days (see weather.ts)
  */
 import cron from 'node-cron';
 import type { CityConfig } from '@gfm/core';
 import { getPool, startJob } from '@gfm/db';
-import { backtestBaseline, labelledDataEnd } from '@gfm/model';
+import { backtestBaseline, labelledDataEnd, refreshNowcastStats } from '@gfm/model';
 import { scorePending, snapshotPredictions } from './accuracy.ts';
 import { importLatestMonth } from './monthlyImport.ts';
 import { refreshStats } from './stats.ts';
+import { weatherArchiveRecent, weatherForecast } from './weather.ts';
 import { trainAndPromote } from './train.ts';
 
 /**
@@ -47,6 +51,7 @@ export async function runNightly(city: CityConfig) {
   try {
     out.finalise = await finaliseLiveEvents();
     out.stats = await refreshStats(city);
+    out.nowcast = await refreshNowcastStats();
 
     // Baseline backtest on the last 28 days, recorded for monitoring.
     const cutoff = new Date((await labelledDataEnd()).getTime() - 28 * 86400_000);
@@ -62,19 +67,22 @@ export async function runNightly(city: CityConfig) {
   }
 }
 
-/** Accuracy tracking jobs; also used by `poll` so local runs build up history. */
+/** Accuracy tracking and weather jobs; also used by `poll` so local runs build up history. */
 export function startAccuracySchedule(city: CityConfig) {
   const opts = { timezone: city.tz, noOverlap: true };
   const log = (job: string) => (e: unknown) => console.error(`[${job}]`, e);
   cron.schedule('5 * * * *', () => void snapshotPredictions(city).catch(log('snapshot')), opts);
   cron.schedule('30 6 * * *', () => void scorePending(city, { rescoreDays: 2 }).catch(log('score')), opts);
+  cron.schedule('15 * * * *', () => void weatherForecast(city).catch(log('weather')), opts);
+  cron.schedule('0 4 * * *', () => void weatherArchiveRecent(city).catch(log('weather-archive')), opts);
   // Catch up after downtime: snapshot what's planned now, score any finished days left over.
   setTimeout(() => {
     void snapshotPredictions(city)
       .then(() => scorePending(city))
       .catch(log('accuracy'));
+    void weatherForecast(city).catch(log('weather'));
   }, 60_000);
-  console.log(`[scheduler] accuracy: snapshots hourly at :05, scoring daily at 06:30 (${city.tz})`);
+  console.log(`[scheduler] accuracy: snapshots hourly at :05, scoring daily at 06:30; weather hourly at :15 (${city.tz})`);
 }
 
 export function startScheduler(city: CityConfig) {

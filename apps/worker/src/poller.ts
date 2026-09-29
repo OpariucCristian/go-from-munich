@@ -8,7 +8,15 @@
  * `fchg` rows only update trips that a `plan` response already created.
  */
 import { polledStations, toLocalParts, type CityConfig, type StationRef } from '@gfm/core';
-import { copyRowsToStaging, createStaging, mergeStaging, updateTripRoutes, withTransaction, type MergeStats } from '@gfm/db';
+import {
+  copyRowsToStaging,
+  createStaging,
+  insertStopMessages,
+  mergeStaging,
+  updateTripRoutes,
+  withTransaction,
+  type MergeStats,
+} from '@gfm/db';
 import { IrisClient, parseTimetable, type ParsedStop } from '@gfm/iris';
 
 const HOUR = 3600_000;
@@ -26,7 +34,7 @@ export class Poller {
   private readonly hubNames: string[];
   private readonly hubEvas: Set<string>;
   private stopped = false;
-  private readonly totals = { plan: 0, changes: 0, rows: 0, trips: 0, observations: 0, errors: 0 };
+  private readonly totals = { plan: 0, changes: 0, rows: 0, trips: 0, observations: 0, messages: 0, errors: 0 };
 
   constructor(
     private readonly city: CityConfig,
@@ -126,6 +134,7 @@ export class Poller {
   /**
    * Merges parsed stops. `routes` also stores each trip's full route; only plan responses carry
    * complete paths (change rows often hold just the changed half), so only they may set it.
+   * Messages (delay causes, announcements) are kept from every response.
    */
   private async store(rows: ParsedStop[], opts: { routes?: boolean } = {}): Promise<MergeStats | null> {
     if (!rows.length) return null;
@@ -139,11 +148,18 @@ export class Poller {
           rows.flatMap((r) => (r.route ? [{ rideId: r.rideId, originStart: r.originStart, route: r.route }] : [])),
         );
       }
-      return merged;
+      const messages = await insertStopMessages(
+        c,
+        rows.flatMap((r) =>
+          r.messages.map((m) => ({ ...m, rideId: r.rideId, originStart: r.originStart, serviceDate: r.serviceDate, eva: r.eva, observedAt: r.observedAt ?? new Date() })),
+        ),
+      );
+      return { ...merged, messages };
     });
     this.totals.rows += stats.stopEvents;
     this.totals.trips += stats.trips;
     this.totals.observations += stats.observations;
+    this.totals.messages += stats.messages;
     return stats;
   }
 }

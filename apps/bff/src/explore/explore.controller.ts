@@ -7,7 +7,7 @@ import { connectionsView, departuresView, patternsView } from '../view/explore.t
 import { MetaService } from './meta.service.ts';
 
 const GROUPS = ['all', 'long', 'regional'];
-const SOURCES = ['all', 'live', 'replay'];
+const SOURCES = ['all', 'live', 'replay', 'near'];
 const EVA = /^0?\d{7}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 

@@ -140,7 +140,7 @@ function liveStatus(core: CoreAccuracy, liveDays: number): string {
 }
 
 export function accuracyView(core: CoreAccuracy): AccuracyView {
-  const liveDays = core.daily.filter((d) => d.source === 'live').length;
+  const liveDays = core.daily.filter((d) => d.source !== 'replay').length;
   const replayDays = core.daily.length - liveDays;
   const calibration: CalibrationPoint[] = core.calibration
     .filter((b) => b.n >= MIN_CALIBRATION_N)
@@ -173,7 +173,9 @@ export function accuracyView(core: CoreAccuracy): AccuracyView {
     misses: core.misses.map(missOf),
     models: core.models.map((m) => modelLabel(m.version)).join(', ') || '–',
     liveStatus: liveStatus(core, liveDays),
-    note: replayDays
+    note: core.source === 'near'
+      ? 'Predictions frozen 30–90 minutes before each stop, when a delay already seen at an earlier stop counts.'
+      : replayDays
       ? `${replayDays} of these days ${replayDays === 1 ? 'is' : 'are'} replayed: predicted using only data from before that day, then scored like live days.`
       : null,
   };

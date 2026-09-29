@@ -123,7 +123,10 @@ export function EstimateView({ estimate }: { estimate: TripEstimate }) {
             {stop.live && (
               <div>
                 <dt>Live now</dt>
-                <dd>{stop.live.label}</dd>
+                <dd>
+                  {stop.live.label}
+                  {stop.live.cause && <span className="muted"> · {stop.live.cause}</span>}
+                </dd>
               </div>
             )}
             {estimate.allConnectionsP !== null && (
@@ -136,6 +139,11 @@ export function EstimateView({ estimate }: { estimate: TripEstimate }) {
           <div className="notice">
             <b>{stop.confidence.level[0]!.toUpperCase() + stop.confidence.level.slice(1)} confidence.</b> {stop.confidence.text}.
           </div>
+          {stop.sighting && (
+            <div className="notice">
+              <b>Live.</b> {stop.sighting.label}.
+            </div>
+          )}
           {estimate.timetableNote && <div className="notice">{estimate.timetableNote}.</div>}
           {estimate.warnings.map((w) => (
             <div className="notice" key={w}>

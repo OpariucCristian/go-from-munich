@@ -17,6 +17,7 @@ const WINDOWS = [
 const SOURCES: { value: AccuracySource; label: string }[] = [
   { value: 'all', label: 'Live + replayed' },
   { value: 'live', label: 'Live only' },
+  { value: 'near', label: 'Shortly before' },
 ];
 const METRICS: { value: TrendMetric; label: string; title: string }[] = [
   { value: 'green', label: 'Green calls', title: 'Share of low-risk (green) calls where the train was at most 5 min late' },
@@ -29,7 +30,7 @@ const signedPct = (x: number | null) => (x === null ? '–' : `${x >= 0 ? '+' : 
 export function AccuracyPage() {
   const [params, setParams] = useSearchParams();
   const days = WINDOWS.some((w) => w.value === params.get('days')) ? params.get('days')! : '30';
-  const source: AccuracySource = params.get('source') === 'live' ? 'live' : 'all';
+  const source: AccuracySource = SOURCES.find((s) => s.value === params.get('source'))?.value ?? 'all';
   const set = (key: string, value: string) =>
     setParams((p) => {
       p.set(key, value);
@@ -56,7 +57,7 @@ export function AccuracyPage() {
       {q.error && <ErrorNote error={q.error} />}
       {q.isPending && <Skeleton height={520} />}
       {a && a.empty && (
-        <Empty title={source === 'live' ? 'No live scores yet' : 'No scores yet'}>
+        <Empty title={source === 'all' ? 'No scores yet' : source === 'near' ? 'No "shortly before" scores yet' : 'No live scores yet'}>
           <p className="muted">{a.liveStatus}</p>
         </Empty>
       )}

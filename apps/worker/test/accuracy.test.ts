@@ -112,8 +112,8 @@ describe.skipIf(!url)('accuracy tracking', () => {
       [today, id],
     );
     const first = await acc.snapshotPredictions(city);
-    expect(first.snapshots).toBe(1); // the stop 20h ahead is outside the 13h window
-    expect((await acc.snapshotPredictions(city)).snapshots).toBe(0);
+    expect(first.live).toBe(1); // the stop 20h ahead is outside the 13h window
+    expect((await acc.snapshotPredictions(city)).live).toBe(0);
     const snap = await pool.query(
       `SELECT lead_min, model_kind, dist FROM prediction_snapshots WHERE trip_id = $1`,
       [id],
@@ -122,5 +122,33 @@ describe.skipIf(!url)('accuracy tracking', () => {
     expect(snap.rows[0].lead_min).toBeGreaterThanOrEqual(119);
     expect(snap.rows[0].lead_min).toBeLessThanOrEqual(120);
     expect(snap.rows[0].dist.reduce((a: number, b: number) => a + b, 0)).toBeCloseTo(1, 5);
+  });
+
+  it('snapshots stops 30–90 min away as near, with the live sighting that shaped them', async () => {
+    const { rows } = await pool.query<{ d: string }>('SELECT current_date::text AS d');
+    const id = await trip(rows[0]!.d, '3000');
+    // Seen 20 min late at Pasing 30 min ago; arrives at Ost in 60 min (gap 90 min → band 3).
+    await pool.query(
+      `INSERT INTO stop_events (service_date, trip_id, eva, stop_seq, planned_dep, dep_delay_min, planned_arr, source)
+       VALUES ($1, $2, '8004158', 1, date_trunc('minute', now()) - interval '30 minutes', 20, NULL, 'live'),
+              ($1, $2, '8000262', 2, NULL, NULL, date_trunc('minute', now()) + interval '60 minutes', 'live')`,
+      [rows[0]!.d, id],
+    );
+    await pool.query(
+      `INSERT INTO agg_nowcast_stats (level, key, event, weights, n)
+       VALUES (3, '4|3', 'a', '{5,5,10,20,500,50,5,5}', 600), (3, '*|3', 'a', '{600,200,100,50,30,10,5,5}', 1000)`,
+    );
+    const out = await acc.snapshotPredictions(city);
+    expect(out.near).toBe(1);
+    const snap = await pool.query(
+      `SELECT source, sighting_eva, sighting_delay, sighting_gap_min, dist FROM prediction_snapshots
+       WHERE trip_id = $1 ORDER BY source`,
+      [id],
+    );
+    expect(snap.rows.map((r) => r.source)).toEqual(['live', 'near']);
+    for (const r of snap.rows) {
+      expect(r).toMatchObject({ sighting_eva: '8004158', sighting_delay: 20, sighting_gap_min: 90 });
+      expect(r.dist[4]).toBeGreaterThan(0.5); // mass moved to 16–30 min
+    }
   });
 });

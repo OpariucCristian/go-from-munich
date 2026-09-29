@@ -46,7 +46,7 @@ export async function seedStations(): Promise<number> {
     [evas, names],
   );
   for (const city of listCities()) {
-    for (const [role, list] of [['hub', city.hubs], ['corridor', city.corridor]] as const) {
+    for (const [role, list] of [['hub', city.hubs], ['corridor', city.corridor], ['other', city.upstream]] as const) {
       for (const s of list) {
         await pool.query(
           `INSERT INTO stations (eva, name, city_id, role) VALUES ($1, $2, $3, $4)

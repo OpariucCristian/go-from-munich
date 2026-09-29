@@ -212,3 +212,46 @@ export async function updateTripRoutes(client: pg.PoolClient, rows: TripRoute[])
   );
   return res.rowCount ?? 0;
 }
+
+export interface StopMessageInput {
+  rideId: string;
+  originStart: string;
+  serviceDate: string;
+  eva: string;
+  id: string;
+  event: 'a' | 'd' | null;
+  type: string;
+  code: number | null;
+  category: string | null;
+  validFrom: Date | null;
+  validTo: Date | null;
+  ts: Date | null;
+  observedAt: Date;
+}
+
+/**
+ * Stores IRIS messages of known trips (the first sighting of each message per stop is kept).
+ * Like updateTripRoutes, trips not in the database are skipped, so call it after merging.
+ */
+export async function insertStopMessages(client: pg.PoolClient, rows: StopMessageInput[]): Promise<number> {
+  if (!rows.length) return 0;
+  const res = await client.query(
+    `INSERT INTO stop_messages (service_date, trip_id, eva, msg_id, event, type, code, category, valid_from, valid_to, ts, first_seen)
+     SELECT u.service_date, t.id, u.eva, u.msg_id, u.event, u.type, u.code, u.category, u.valid_from, u.valid_to, u.ts, u.observed_at
+     FROM jsonb_to_recordset($1::jsonb) AS u(ride_id text, origin_start text, service_date date, eva text, msg_id text,
+          event char(1), type char(1), code smallint, category text, valid_from timestamptz, valid_to timestamptz,
+          ts timestamptz, observed_at timestamptz)
+     JOIN trips t ON t.ride_id = u.ride_id AND t.origin_start = u.origin_start
+     ON CONFLICT (trip_id, eva, msg_id) DO NOTHING`,
+    [
+      JSON.stringify(
+        rows.map((r) => ({
+          ride_id: r.rideId, origin_start: r.originStart, service_date: r.serviceDate, eva: r.eva, msg_id: r.id,
+          event: r.event, type: r.type, code: r.code, category: r.category, valid_from: r.validFrom,
+          valid_to: r.validTo, ts: r.ts, observed_at: r.observedAt,
+        })),
+      ),
+    ],
+  );
+  return res.rowCount ?? 0;
+}
