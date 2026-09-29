@@ -5,7 +5,7 @@ import type { CorePrediction, CoreStopPrediction, CoreTrainStops } from '../src/
 import { EstimateService, parseTrain, timelineQueries } from '../src/estimate/estimate.service.ts';
 import { MetaService } from '../src/explore/meta.service.ts';
 import { featuredView, headlineOf, tripEstimate } from '../src/view/estimate.ts';
-import { accuracyView } from '../src/view/accuracy.ts';
+import { accuracyRunsView, accuracyRunView, accuracyView } from '../src/view/accuracy.ts';
 import { patternsView } from '../src/view/explore.ts';
 import { confidenceOf, dateLabelOf, distributionOf, durationLabel, timeOf, toneOf } from '../src/view/format.ts';
 
@@ -222,7 +222,7 @@ describe('accuracy view', () => {
     },
     models: [{ version: 'baseline-v1', n: 1000 }],
     misses: [{
-      date: '2026-09-29', source: 'live', trainType: 'ICE', trainNumber: '514', eva: '8000261', station: 'München Hbf',
+      date: '2026-09-29', source: 'live', tripId: '77', trainType: 'ICE', trainNumber: '514', eva: '8000261', station: 'München Hbf',
       event: 'd', planned: '2026-09-29T13:28:00Z', predictedMedian: 1, predictedLate5: 0.09, predictedCancelled: 0.01,
       observedBucket: 5, observedDelay: 42, cancelled: false, rps: 0.6,
     }],
@@ -254,7 +254,9 @@ describe('accuracy view', () => {
     expect(v.breakdown[0]!.rows.map((r) => r.label)).toEqual(['ICE', 'RE']);
     expect(v.breakdown[1]!.rows[0]!.label).toBe('Munich hubs');
     expect(v.breakdown[3]!.rows.map((r) => r.label)).toEqual(['0–2h ahead', '6–12h ahead']);
-    expect(v.misses[0]).toMatchObject({ train: 'ICE 514', time: '15:28', event: 'dep', predicted: 'Likely +1 · 9% risk', actual: '+42 min' });
+    expect(v.misses[0]).toMatchObject({
+      train: 'ICE 514', time: '15:28', event: 'dep', predicted: 'Likely +1 · 9% risk', actual: '+42 min', run: '2026-09-29.77.live',
+    });
     expect(v.note).toMatch(/^1 of these days is replayed:/);
     expect(v.liveStatus).toContain('2,267 predictions are waiting');
   });
@@ -265,6 +267,41 @@ describe('accuracy view', () => {
     expect(v.empty).toBe(true);
     expect(v.stats).toEqual([]);
     expect(v.liveStatus).toMatch(/starts with the next hourly snapshot/);
+  });
+});
+
+describe('accuracy run views', () => {
+  const run: import('../src/core/types.ts').CoreRunSummary = {
+    date: '2026-09-28', source: 'live', tripId: '42', trainType: 'RE', trainNumber: '4012',
+    firstPlanned: '2026-09-28T05:50:00Z', stops: 4, cancelled: 1, predictedMedian: 1.67, observedDelay: 9.33,
+    maeMin: 7.66, within80: 1 / 3, worstMissMin: 18, modelVersions: ['baseline-v1'],
+  };
+
+  it('lists runs with averages, a tone and a run key', () => {
+    const v = accuracyRunsView({ runs: [run, { ...run, tripId: '43', maeMin: 1, within80: 1 }], total: 12, tz: 'Europe/Berlin' });
+    expect(v.total).toBe(12);
+    expect(v.runs[0]).toMatchObject({
+      run: '2026-09-28.42.live', train: 'RE 4012', time: '07:50', predicted: 1.7, actual: 9.3, maeMin: 7.7, tone: 'bad',
+    });
+    expect(v.runs[0]!.dateLabel).toBe(dateLabelOf('2026-09-28'));
+    expect(v.runs[1]!.tone).toBe('good');
+  });
+
+  it('shows a run stop by stop', () => {
+    const stop = {
+      eva: '8000261', station: 'München Hbf', event: 'd' as const, planned: '2026-09-28T05:50:00Z', leadMin: 200,
+      modelVersion: 'baseline-v1', predictedMedian: 1, predictedP80: 4, predictedLate5: 0.12, predictedCancelled: 0.01,
+      observedDelay: -1, cancelled: false, within80: true, rps: 0.02,
+    };
+    const v = accuracyRunView({
+      run,
+      stops: [stop, { ...stop, event: 'a', observedDelay: null, cancelled: true, within80: null }],
+      tz: 'Europe/Berlin',
+    });
+    expect(v.model).toBe('baseline v1');
+    expect(v.summary).toBe('Said +2 on average, was +9. Typical miss 7.7 min, 1 of 3 within the 80% limit. 1 stop was cancelled.');
+    expect(v.stops[0]).toMatchObject({ event: 'dep', time: '07:50', lead: '3h ahead', predicted: 1, limit80: 4, actual: 0 });
+    expect(v.stops[1]).toMatchObject({ event: 'arr', actual: null, cancelled: true, within80: null });
   });
 });
 

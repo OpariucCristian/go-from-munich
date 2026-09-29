@@ -157,6 +157,7 @@ export interface CoreAccuracy {
   misses: {
     date: string;
     source: 'live' | 'replay';
+    tripId: string;
     trainType: string;
     trainNumber: string;
     eva: string;
@@ -172,6 +173,50 @@ export interface CoreAccuracy {
     rps: number;
   }[];
   live: { trackingSince: string | null; pendingSnapshots: number; lastScoredAt: string | null };
+  tz: string;
+}
+
+export interface CoreRunSummary {
+  date: string;
+  source: 'live' | 'replay';
+  tripId: string;
+  trainType: string;
+  trainNumber: string;
+  firstPlanned: string;
+  stops: number;
+  cancelled: number;
+  predictedMedian: number | null;
+  observedDelay: number | null;
+  maeMin: number | null;
+  within80: number | null;
+  worstMissMin: number | null;
+  modelVersions: string[];
+}
+
+export interface CoreAccuracyRuns {
+  runs: CoreRunSummary[];
+  total: number;
+  tz: string;
+}
+
+export interface CoreAccuracyRun {
+  run: CoreRunSummary;
+  stops: {
+    eva: string;
+    station: string;
+    event: 'a' | 'd';
+    planned: string;
+    leadMin: number;
+    modelVersion: string;
+    predictedMedian: number;
+    predictedP80: number;
+    predictedLate5: number;
+    predictedCancelled: number;
+    observedDelay: number | null;
+    cancelled: boolean;
+    within80: boolean | null;
+    rps: number;
+  }[];
   tz: string;
 }
 

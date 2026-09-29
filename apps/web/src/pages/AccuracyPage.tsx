@@ -2,12 +2,22 @@
  * How good are the forecasts? Predictions are frozen before each train runs and scored against
  * the real delay the morning after (replayed days fill in history before live tracking began).
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import type { AccuracyBreakdownRow, AccuracyMiss, AccuracySource, AccuracyView } from '../../../bff/src/contract.ts';
-import { useAccuracy } from '../api.ts';
-import { CalibrationChart, TrendChart, type TrendMetric } from '../components/AccuracyCharts.tsx';
+import type {
+  AccuracyBreakdownRow,
+  AccuracyMiss,
+  AccuracyRunRow,
+  AccuracyRunSort,
+  AccuracySource,
+  AccuracyView,
+} from '../../../bff/src/contract.ts';
+import { useAccuracy, useAccuracyRun, useAccuracyRuns } from '../api.ts';
+import { CalibrationChart, RunChart, TrendChart, type TrendMetric } from '../components/AccuracyCharts.tsx';
 import { Chips, Empty, ErrorNote, Segmented, Skeleton, pct } from '../components/ui.tsx';
+
+/** A run key from the BFF: `<date>.<tripId>.<source>`. */
+const RUN = /^\d{4}-\d{2}-\d{2}\.\d{1,18}\.(live|replay)$/;
 
 const WINDOWS = [
   { value: '7', label: '7 days' },
@@ -30,9 +40,11 @@ export function AccuracyPage() {
   const [params, setParams] = useSearchParams();
   const days = WINDOWS.some((w) => w.value === params.get('days')) ? params.get('days')! : '30';
   const source: AccuracySource = params.get('source') === 'live' ? 'live' : 'all';
-  const set = (key: string, value: string) =>
+  const run = RUN.test(params.get('run') ?? '') ? params.get('run') : null;
+  const set = (key: string, value: string | null) =>
     setParams((p) => {
-      p.set(key, value);
+      if (value === null) p.delete(key);
+      else p.set(key, value);
       return p;
     }, { replace: true });
   const q = useAccuracy(days, source);
@@ -60,12 +72,14 @@ export function AccuracyPage() {
           <p className="muted">{a.liveStatus}</p>
         </Empty>
       )}
-      {a && !a.empty && <Report a={a} />}
+      {a && !a.empty && (
+        <Report a={a} runs={<RunsCard days={days} source={source} run={run} onRun={(r) => set('run', r)} />} onRun={(r) => set('run', r)} />
+      )}
     </section>
   );
 }
 
-function Report({ a }: { a: AccuracyView }) {
+function Report({ a, runs, onRun }: { a: AccuracyView; runs: ReactNode; onRun: (run: string) => void }) {
   const [metric, setMetric] = useState<TrendMetric>('green');
   const current = METRICS.find((m) => m.value === metric)!;
   return (
@@ -147,6 +161,8 @@ function Report({ a }: { a: AccuracyView }) {
         </div>
       </div>
 
+      {runs}
+
       {a.misses.length > 0 && (
         <div className="card">
           <div>
@@ -155,7 +171,7 @@ function Report({ a }: { a: AccuracyView }) {
           </div>
           <div className="acc-misses">
             {a.misses.map((m) => (
-              <MissRow key={`${m.date}-${m.train}-${m.eva}-${m.event}`} m={m} />
+              <MissRow key={`${m.date}-${m.train}-${m.eva}-${m.event}`} m={m} onRun={onRun} />
             ))}
           </div>
         </div>
@@ -202,20 +218,202 @@ function BreakdownTable({ title, rows }: { title: string; rows: AccuracyBreakdow
   );
 }
 
-function MissRow({ m }: { m: AccuracyMiss }) {
-  const href = `/?${new URLSearchParams({ mode: 'train', train: m.train, date: m.date, tf: m.eva })}`;
+const trainHref = (train: string, date: string, eva?: string) =>
+  `/?${new URLSearchParams({ mode: 'train', train, date, ...(eva ? { tf: eva } : {}) })}`;
+
+function MissRow({ m, onRun }: { m: AccuracyMiss; onRun: (run: string) => void }) {
   return (
-    <Link className="acc-miss" to={href}>
-      <span className="train-tag">{m.train}</span>
-      <span className="acc-miss-where">
-        <strong>{m.station}</strong>
-        <span className="muted">
-          {m.dateLabel} · {m.event} {m.time}
-          {m.source === 'replay' ? ' · replayed' : ''}
+    <div className="acc-miss-row">
+      <Link className="acc-miss" to={trainHref(m.train, m.date, m.eva)}>
+        <span className="train-tag">{m.train}</span>
+        <span className="acc-miss-where">
+          <strong>{m.station}</strong>
+          <span className="muted">
+            {m.dateLabel} · {m.event} {m.time}
+            {m.source === 'replay' ? ' · replayed' : ''}
+          </span>
         </span>
-      </span>
-      <span className="acc-miss-said muted">Said: {m.predicted}</span>
-      <span className="acc-miss-was">{m.actual}</span>
-    </Link>
+        <span className="acc-miss-said muted">Said: {m.predicted}</span>
+        <span className="acc-miss-was">{m.actual}</span>
+      </Link>
+      <button type="button" className="chip acc-miss-run" onClick={() => onRun(m.run)} title="Predicted vs actual at every stop of this run">
+        Whole run
+      </button>
+    </div>
+  );
+}
+
+const RUN_SORTS: { value: AccuracyRunSort; label: string }[] = [
+  { value: 'miss', label: 'Biggest miss' },
+  { value: 'recent', label: 'Most recent' },
+];
+
+const minutes = (x: number | null) => (x === null ? '–' : `+${x.toFixed(1)}`);
+
+/** Train by train: each scored run's average predicted vs actual delay, with a stop-by-stop drill-down. */
+function RunsCard(props: { days: string; source: AccuracySource; run: string | null; onRun: (run: string | null) => void }) {
+  const [sort, setSort] = useState<AccuracyRunSort>('miss');
+  const [text, setText] = useState('');
+  const [train, setTrain] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setTrain(text.trim()), 300);
+    return () => clearTimeout(t);
+  }, [text]);
+  const q = useAccuracyRuns(props.days, props.source, sort, train);
+  const panel = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (props.run) panel.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [props.run]);
+
+  return (
+    <div className="card" ref={panel}>
+      <div className="card-head">
+        <div>
+          <div className="card-title">Train by train</div>
+          <div className="muted acc-sub">
+            Each run is one train on one day. We compare the most likely delay we showed with the real delay, averaged over
+            the stops we scored. Pick a run to see every stop.
+          </div>
+        </div>
+        <div className="acc-run-controls">
+          <label className="field acc-run-filter">
+            <span className="field-label">Train</span>
+            <input value={text} onChange={(e) => setText(e.target.value)} placeholder="RE 4012" autoCapitalize="characters" />
+          </label>
+          <Chips label="Sort runs" value={sort} onChange={setSort} options={RUN_SORTS} />
+        </div>
+      </div>
+      {props.run && <RunDetail run={props.run} onClose={() => props.onRun(null)} />}
+      {q.error && <ErrorNote error={q.error} />}
+      {q.isPending && <Skeleton height={240} />}
+      {q.data && !q.data.runs.length && <div className="muted">No scored runs{train ? ` match “${train}”` : ''}.</div>}
+      {q.data && q.data.runs.length > 0 && (
+        <div className="acc-scroll acc-run-list">
+          <table className="acc-table acc-run-table">
+            <thead>
+              <tr>
+                <th>Train</th>
+                <th>Day</th>
+                <th>Stops</th>
+                <th>Said</th>
+                <th>Was</th>
+                <th>Typical miss</th>
+                <th>80% limit kept</th>
+              </tr>
+            </thead>
+            <tbody>
+              {q.data.runs.map((r) => (
+                <RunTableRow key={r.run} r={r} selected={r.run === props.run} onSelect={() => props.onRun(r.run === props.run ? null : r.run)} />
+              ))}
+            </tbody>
+          </table>
+          {q.data.total > q.data.runs.length && (
+            <div className="muted acc-run-more">
+              Showing {q.data.runs.length} of {q.data.total.toLocaleString('en-GB')} runs. Filter by train to find others.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RunTableRow({ r, selected, onSelect }: { r: AccuracyRunRow; selected: boolean; onSelect: () => void }) {
+  return (
+    <tr className={selected ? 'acc-run-row selected' : 'acc-run-row'} onClick={onSelect}>
+      <td>
+        <button type="button" className="acc-run-open" aria-pressed={selected} onClick={(e) => (e.stopPropagation(), onSelect())}>
+          <span className="train-tag">{r.train}</span>
+        </button>
+      </td>
+      <td>
+        {r.dateLabel} <span className="muted">{r.time}</span>
+        {r.source === 'replay' && <span className="muted"> · replayed</span>}
+      </td>
+      <td>
+        {r.stops}
+        {r.cancelled > 0 && <span className="tone-bad"> ({r.cancelled} ✕)</span>}
+      </td>
+      <td>{minutes(r.predicted)}</td>
+      <td>{minutes(r.actual)}</td>
+      <td className={r.tone === 'neutral' ? '' : `tone-${r.tone}`}>{r.maeMin === null ? '–' : `${r.maeMin.toFixed(1)} min`}</td>
+      <td>{r.within80 === null ? '–' : pct(r.within80)}</td>
+    </tr>
+  );
+}
+
+function RunDetail({ run, onClose }: { run: string; onClose: () => void }) {
+  const q = useAccuracyRun(run);
+  const v = q.data;
+  return (
+    <div className="acc-run-detail" aria-live="polite">
+      <div className="card-head">
+        <div className="acc-run-title">
+          {v ? (
+            <>
+              <span className="train-tag">{v.run.train}</span>
+              <strong>{v.run.dateLabel}</strong>
+              {v.run.source === 'replay' && <span className="muted">replayed</span>}
+              <span className="muted">· model {v.model}</span>
+            </>
+          ) : (
+            <strong>Loading run…</strong>
+          )}
+        </div>
+        <div className="acc-run-actions">
+          {v && (
+            <Link to={trainHref(v.run.train, v.run.date)} className="chip">
+              Open train
+            </Link>
+          )}
+          <button type="button" className="chip" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </div>
+      {q.error && <ErrorNote error={q.error} />}
+      {q.isPending && <Skeleton height={240} />}
+      {v && (
+        <>
+          {v.summary && <div className="acc-sub">{v.summary}</div>}
+          <RunChart stops={v.stops} />
+          <details className="acc-table-toggle">
+            <summary>Stop by stop</summary>
+            <div className="acc-scroll">
+              <table className="acc-table">
+                <thead>
+                  <tr>
+                    <th>Stop</th>
+                    <th>Planned</th>
+                    <th>Said (likely)</th>
+                    <th>80% limit</th>
+                    <th>&gt;5 min risk</th>
+                    <th>Was</th>
+                    <th>Forecast made</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {v.stops.map((s, i) => (
+                    <tr key={`${s.eva}-${s.event}-${i}`}>
+                      <td>{s.station}</td>
+                      <td>
+                        {s.event} {s.time}
+                      </td>
+                      <td>+{s.predicted}</td>
+                      <td>+{s.limit80}</td>
+                      <td>{pct(s.late5)}</td>
+                      <td className={s.cancelled || s.within80 === false ? 'tone-bad' : 'tone-good'}>
+                        {s.cancelled ? 'Cancelled' : `+${s.actual}`}
+                      </td>
+                      <td className="muted">{s.lead}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </>
+      )}
+    </div>
   );
 }

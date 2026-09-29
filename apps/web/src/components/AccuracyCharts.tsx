@@ -1,6 +1,9 @@
-/** Charts for the Accuracy screen: a daily trend (one metric at a time) and a calibration plot. */
+/**
+ * Charts for the Accuracy screen: a daily trend (one metric at a time), a calibration plot and one
+ * train run's predicted vs actual delay, stop by stop.
+ */
 import { useLayoutEffect, useRef, useState } from 'react';
-import type { AccuracyDay, CalibrationPoint } from '../../../bff/src/contract.ts';
+import type { AccuracyDay, AccuracyRunStop, CalibrationPoint } from '../../../bff/src/contract.ts';
 import { pct } from './ui.tsx';
 
 export type TrendMetric = 'green' | 'within80' | 'skill';
@@ -234,6 +237,114 @@ export function CalibrationChart({ points }: { points: CalibrationPoint[] }) {
           <strong>{pct(hovered.observed)} were late</strong>
           <span>We said {hovered.label} (avg {pct(hovered.predicted)})</span>
           <span>{hovered.n.toLocaleString('en-GB')} predictions</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const shortStation = (name: string) => {
+  const s = name.replace(/^München[- ]/, '').replace(/\s+Gl\..*$/, '');
+  return s.length > 14 ? `${s.slice(0, 13)}…` : s;
+};
+
+/**
+ * One run, stop by stop: the shaded bar is the "80% chance it's at most this late" limit, the
+ * hollow dot the most likely delay we said and the filled dot what happened (green inside the
+ * limit, red above it). Cancelled stops are marked with a cross.
+ */
+export function RunChart({ stops }: { stops: AccuracyRunStop[] }) {
+  const [ref, width] = useWidth<HTMLDivElement>();
+  const [hover, setHover] = useState<number | null>(null);
+  const height = 240;
+  const m = { top: 16, right: 12, bottom: 40, left: 44 };
+  const innerW = Math.max(0, width - m.left - m.right);
+  const innerH = height - m.top - m.bottom;
+  const maxV = Math.max(10, ...stops.flatMap((s) => [s.limit80, s.predicted, s.actual ?? 0]));
+  // About five gridlines at round minute steps (5, 10, 20, 30, 60, 120…).
+  const tickStep = [5, 10, 20, 30, 60, 120, 240].find((s) => maxV / s <= 5) ?? 480;
+  const hi = Math.ceil((maxV + 1) / tickStep) * tickStep;
+  const ticks: number[] = [];
+  for (let t = 0; t <= hi; t += tickStep) ticks.push(t);
+  const y = (v: number) => m.top + innerH - (v / hi) * innerH;
+  const step = stops.length ? innerW / stops.length : 0;
+  const x = (i: number) => m.left + (i + 0.5) * step;
+  const band = Math.min(28, step * 0.5);
+  const labelEvery = Math.max(1, Math.ceil(stops.length / Math.max(1, Math.floor(innerW / 90))));
+  const hovered = hover === null ? null : stops[hover];
+
+  return (
+    <div className="acc-chart" ref={ref}>
+      <div className="legend acc-legend" aria-hidden>
+        <span><i className="run-key run-key-band" />80% limit</span>
+        <span><i className="run-key run-key-said" />Said (likely)</span>
+        <span><i className="run-key run-key-was" />Was</span>
+      </div>
+      {width > 0 && (
+        <svg width={width} height={height} role="img" aria-label="Predicted versus actual delay at each stop" onPointerLeave={() => setHover(null)}>
+          {ticks.map((t) => (
+            <g key={t}>
+              <line x1={m.left} x2={width - m.right} y1={y(t)} y2={y(t)} className="grid" />
+              <text x={m.left - 8} y={y(t)} className="axis" textAnchor="end" dominantBaseline="middle">
+                +{t}
+              </text>
+            </g>
+          ))}
+          {stops.map((s, i) => (
+            <g key={`${s.eva}-${s.event}-${i}`}>
+              {i % labelEvery === 0 && (
+                <>
+                  <text x={x(i)} y={height - 22} className="axis" textAnchor="middle">
+                    {shortStation(s.station)}
+                  </text>
+                  <text x={x(i)} y={height - 8} className="axis" textAnchor="middle">
+                    {s.time} {s.event}
+                  </text>
+                </>
+              )}
+              {hover === i && <line x1={x(i)} x2={x(i)} y1={m.top} y2={m.top + innerH} className="crosshair" />}
+              <rect x={x(i) - band / 2} y={y(s.limit80)} width={band} height={y(0) - y(s.limit80)} rx={3} className="run-band" />
+              {s.cancelled ? (
+                <text x={x(i)} y={y(0) - 10} className="run-cancel" textAnchor="middle" dominantBaseline="middle">
+                  ✕
+                </text>
+              ) : (
+                <>
+                  <line x1={x(i)} x2={x(i)} y1={y(s.predicted)} y2={y(s.actual!)} className="run-gap" />
+                  <circle cx={x(i)} cy={y(s.predicted)} r={5} className="run-said" />
+                  <circle cx={x(i)} cy={y(s.actual!)} r={5} fill={s.within80 ? 'var(--good)' : 'var(--bad)'} className="ring" />
+                </>
+              )}
+              <rect
+                x={m.left + i * step}
+                y={m.top}
+                width={step}
+                height={innerH}
+                fill="transparent"
+                tabIndex={0}
+                aria-label={`${s.station} ${s.event} ${s.time}: said +${s.predicted}, 80% limit +${s.limit80}, ${
+                  s.cancelled ? 'cancelled' : `was +${s.actual}`
+                }`}
+                onPointerEnter={() => setHover(i)}
+                onFocus={() => setHover(i)}
+                onBlur={() => setHover(null)}
+              />
+            </g>
+          ))}
+        </svg>
+      )}
+      {hovered && (
+        <div className="tooltip" style={{ left: Math.min(Math.max(x(hover!), 110), width - 110), top: 8 }} role="status">
+          <strong>{hovered.cancelled ? 'Cancelled' : `Was +${hovered.actual}`}</strong>
+          <span>
+            {hovered.station} · {hovered.event} {hovered.time}
+          </span>
+          <span>
+            Said likely +{hovered.predicted}, 80% ≤ +{hovered.limit80}
+          </span>
+          <span>
+            {pct(hovered.late5)} risk of &gt;5 min · {pct(hovered.cancelRisk)} cancellation · {hovered.lead}
+          </span>
         </div>
       )}
     </div>

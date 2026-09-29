@@ -228,6 +228,57 @@ export interface AccuracyMiss {
   predicted: string; // 'Likely +1 · 9% risk'
   actual: string; // '+34 min' | 'Cancelled'
   source: 'live' | 'replay';
+  /** Opens this run's stop-by-stop view: `<date>.<tripId>.<source>`. */
+  run: string;
+}
+
+export type AccuracyRunSort = 'miss' | 'recent';
+
+/** One train run (one trip on one service date) with predicted vs actual delay. */
+export interface AccuracyRunRow {
+  run: string; // '<date>.<tripId>.<source>'
+  train: string; // 'RE 4012'
+  trainType: string;
+  trainNumber: string;
+  date: string; // YYYY-MM-DD
+  dateLabel: string; // 'Mon 28 Sep'
+  time: string; // first planned stop, HH:MM
+  source: 'live' | 'replay';
+  stops: number;
+  cancelled: number;
+  /** Averages over the stops that ran, in minutes; null when every stop was cancelled. */
+  predicted: number | null;
+  actual: number | null;
+  maeMin: number | null;
+  within80: number | null;
+  tone: Tone | 'neutral';
+}
+
+export interface AccuracyRunsView {
+  runs: AccuracyRunRow[];
+  total: number;
+}
+
+export interface AccuracyRunStop {
+  station: string;
+  eva: string;
+  event: 'arr' | 'dep';
+  time: string; // planned, HH:MM
+  lead: string; // '3h ahead'
+  predicted: number; // likely (median) delay, min
+  limit80: number; // "80% chance it's at most this late", min
+  late5: number;
+  cancelRisk: number;
+  actual: number | null; // clamped at 0; null when cancelled
+  cancelled: boolean;
+  within80: boolean | null;
+}
+
+export interface AccuracyRunView {
+  run: AccuracyRunRow;
+  model: string;
+  summary: string; // 'Said +2 on average, was +9. Typical miss 7.0 min, 1 of 3 within the 80% limit.'
+  stops: AccuracyRunStop[];
 }
 
 export interface AccuracyView {
