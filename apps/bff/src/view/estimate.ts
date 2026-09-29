@@ -47,6 +47,7 @@ export function stopView(s: TimelineStop, trainType: string, trainNumber: string
     tone: toneOf(dist.lateOver5),
     headline: headlineOf(dist),
     sentence: sentenceOf(dist, p.planned, event),
+    hero: heroOf(dist, s.name, p.planned, event),
     dist,
     confidence: confidenceOf(p.prediction, `${trainType} ${trainNumber}`, trainType),
     live: liveOf(p.live),
@@ -89,6 +90,22 @@ export function sentenceOf(d: DistributionView, planned: string, event: StopView
   let text = `Most likely ${event} is ${likely}. There's a ${pct(d.onTime)} chance it's on time and a ${pct(d.lateOver15)} chance it's more than 15 minutes late.`;
   if (d.cancelled >= 0.03) text += ` Cancellation risk: ${pct(d.cancelled)}.`;
   return text;
+}
+
+/**
+ * The answer as one figure and two lines (design 2a): '+24' / 'min late at München Ost' /
+ * 'Arrives around 19:56 · scheduled 19:32'. Each number appears once on the page.
+ */
+export function heroOf(d: DistributionView, name: string, planned: string, event: StopView['event']): StopView['hero'] {
+  const where = event === 'arrival' ? `at ${name}` : `leaving ${name}`;
+  const likely = timeOf(new Date(Date.parse(planned) + d.median * 60_000));
+  let sub = `${event === 'arrival' ? 'Arrives' : 'Departs'} around ${likely} · scheduled ${timeOf(planned)}`;
+  if (d.cancelled >= 0.03) sub += ` · ${pct(d.cancelled)} chance of cancellation`;
+  return {
+    figure: signedMin(d.median),
+    label: d.median <= 2 ? `min · likely on time ${where}` : `min late ${where}`,
+    sub,
+  };
 }
 
 export function transferViews(core: CoreTripPrediction | null | undefined): TransferView[] {
