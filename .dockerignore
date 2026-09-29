@@ -5,3 +5,4 @@ models
 spikes
 .env
 .git
+apps/web/dist

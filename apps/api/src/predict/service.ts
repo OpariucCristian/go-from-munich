@@ -6,6 +6,7 @@ import {
   BUCKET_LABELS,
   connectionFailureProbability,
   cumulative,
+  delaySummary,
   minutesBetween,
   type CityConfig,
   type Distribution,
@@ -37,19 +38,25 @@ export interface LiveStatus {
   observedAt: string | null;
 }
 
-function describe(p: StopPrediction) {
+export function describe(p: StopPrediction) {
   const c = cumulative(p.distribution);
   return {
     buckets: p.distribution.map((prob, i) => ({ label: BUCKET_LABELS[i]!, p: round(prob) })),
     atLeast: Object.fromEntries(Object.entries(c.atLeast).map(([k, v]) => [k, round(v)])),
     cancelled: round(c.cancelled),
+    minutes: delaySummary(p.distribution),
     support: { level: p.supportLevel, observations: p.supportN },
   };
 }
 
 const round = (x: number) => Math.round(x * 10000) / 10000;
 
-async function liveStatus(leg: LegInput, eva: string, event: 'a' | 'd', planned: Date): Promise<LiveStatus | null> {
+export async function liveStatus(
+  leg: Pick<LegInput, 'trainType' | 'trainNumber'>,
+  eva: string,
+  event: 'a' | 'd',
+  planned: Date,
+): Promise<LiveStatus | null> {
   const col = event === 'a' ? 'arr' : 'dep';
   const { rows } = await getPool().query<{ delay: number | null; cancelled: boolean; observed: Date | null }>(
     `SELECT e.${col}_delay_min AS delay, e.${col}_cancelled AS cancelled, e.last_observed_at AS observed

@@ -7,6 +7,7 @@ import path from 'node:path';
 import type { CityConfig } from '@gfm/core';
 import { getPool, withTransaction } from '@gfm/db';
 import { BaselinePredictor, type StopPrediction } from './baseline.ts';
+import { NowcastLayer } from './nowcast.ts';
 import { OnnxPredictor } from './onnx.ts';
 import type { StopQuery } from './groups.ts';
 
@@ -58,19 +59,27 @@ export async function registerAndMaybePromote(modelDir: string, version: string,
   });
 }
 
-/** Loads the active model, or the baseline when none is active or the artifact can't be loaded. */
+/**
+ * Loads the active model (the baseline when none is active or the artifact can't be loaded),
+ * wrapped in the live-delay nowcast unless NOWCAST=off.
+ */
 export async function loadActivePredictor(city: CityConfig): Promise<ServingPredictor & { id: number | null }> {
+  const { predictor, id } = await loadActiveModel(city);
+  const served = process.env.NOWCAST === 'off' ? predictor : new NowcastLayer(predictor, city.tz);
+  return Object.assign(served, { id });
+}
+
+async function loadActiveModel(city: CityConfig): Promise<{ predictor: ServingPredictor; id: number | null }> {
   const { rows } = await getPool().query<{ id: number; kind: string; version: string; artifact_path: string | null }>(
     'SELECT id, kind, version, artifact_path FROM models WHERE is_active',
   );
   const active = rows[0];
   if (active?.kind === 'lgbm' && active.artifact_path) {
     try {
-      const p = await OnnxPredictor.load(active.version, active.artifact_path, city);
-      return Object.assign(p, { id: active.id });
+      return { predictor: await OnnxPredictor.load(active.version, active.artifact_path, city), id: active.id };
     } catch (err) {
       console.error(`[registry] failed to load ${active.artifact_path}, falling back to baseline`, err);
     }
   }
-  return Object.assign(new BaselinePredictor('baseline-v1', undefined, city.tz), { id: null });
+  return { predictor: new BaselinePredictor('baseline-v1', undefined, city.tz), id: null };
 }

@@ -47,6 +47,25 @@ describe.skipIf(!url)('mergeStaging', () => {
     expect(await row()).toMatchObject({ dep_delay_min: 7, source: 'piebro' });
   });
 
+  it('stores the longest route per trip and skips unknown trips', async () => {
+    const updated = await db.withTransaction((c) =>
+      db.updateTripRoutes(c, [
+        { rideId: '42', originStart: '2609281000', route: ['München Hbf', 'Augsburg Hbf'] },
+        { rideId: '42', originStart: '2609281000', route: ['München Hbf', 'Augsburg Hbf', 'Ulm Hbf'] },
+        { rideId: 'nope', originStart: '2609281000', route: ['A', 'B'] },
+      ]),
+    );
+    expect(updated).toBe(1);
+    const { rows } = await pool.query("SELECT route FROM trips WHERE ride_id = '42'");
+    expect(rows[0].route).toEqual(['München Hbf', 'Augsburg Hbf', 'Ulm Hbf']);
+    // Unchanged routes aren't rewritten.
+    expect(
+      await db.withTransaction((c) =>
+        db.updateTripRoutes(c, [{ rideId: '42', originStart: '2609281000', route: ['München Hbf', 'Augsburg Hbf', 'Ulm Hbf'] }]),
+      ),
+    ).toBe(0);
+  });
+
   it('lets partial live changes update without erasing planned data, and records observations', async () => {
     const change = {
       ...base, trainType: null, trainNumber: null, finalDestination: null, stopSeq: null,

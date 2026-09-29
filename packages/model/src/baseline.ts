@@ -9,6 +9,7 @@ import { NUM_BUCKETS, normalize, type Distribution } from '@gfm/core';
 import { getPool } from '@gfm/db';
 import type pg from 'pg';
 import { groupKeys, type Level, type StopQuery } from './groups.ts';
+import type { Sighting } from './nowcast.ts';
 
 export interface StatRow {
   level: number;
@@ -23,9 +24,16 @@ export interface StopPrediction {
   /** Most specific level with any data, and how many raw observations it had. */
   supportLevel: Level;
   supportN: number;
+  /** Set when a live sighting of the train changed the distribution (see nowcast.ts). */
+  sighting?: Sighting;
 }
 
 export const DEFAULT_ALPHA = 8;
+
+/** One Dirichlet smoothing step: a group's weights plus `alpha` pseudo-observations of its parent. */
+export function dirichletStep(parent: Distribution, weights: number[], alpha: number): Distribution {
+  return normalize(weights.map((w, i) => w + alpha * parent[i]!));
+}
 
 /** Pure blending step, separated from DB access so it can be unit tested. */
 export function blend(
@@ -42,7 +50,7 @@ export function blend(
     const row = stats.get(`${level}|${key}|${q.event}`);
     if (!row) continue;
     const sum = row.weights.reduce((a, b) => a + b, 0);
-    p = normalize(row.weights.map((w, i) => w + alpha * p[i]!));
+    p = dirichletStep(p, row.weights, alpha);
     if (sum > 0) {
       supportLevel = level;
       supportN = row.n;

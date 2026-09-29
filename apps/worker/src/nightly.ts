@@ -3,11 +3,13 @@
  *  02:30  finalise yesterday's live stop events, refresh aggregate stats, backtest the baseline,
  *         then train LightGBM and promote it if it beats the baseline and the active model
  *  3rd of month 06:00  import newly published dataset months
+ *  hourly :05  freeze predictions for newly planned stops; 06:30  score finished days (see accuracy.ts)
  */
 import cron from 'node-cron';
 import type { CityConfig } from '@gfm/core';
 import { getPool, startJob } from '@gfm/db';
 import { backtestBaseline, labelledDataEnd } from '@gfm/model';
+import { scorePending, snapshotPredictions } from './accuracy.ts';
 import { importLatestMonth } from './monthlyImport.ts';
 import { refreshStats } from './stats.ts';
 import { trainAndPromote } from './train.ts';
@@ -60,9 +62,25 @@ export async function runNightly(city: CityConfig) {
   }
 }
 
+/** Accuracy tracking jobs; also used by `poll` so local runs build up history. */
+export function startAccuracySchedule(city: CityConfig) {
+  const opts = { timezone: city.tz, noOverlap: true };
+  const log = (job: string) => (e: unknown) => console.error(`[${job}]`, e);
+  cron.schedule('5 * * * *', () => void snapshotPredictions(city).catch(log('snapshot')), opts);
+  cron.schedule('30 6 * * *', () => void scorePending(city, { rescoreDays: 2 }).catch(log('score')), opts);
+  // Catch up after downtime: snapshot what's planned now, score any finished days left over.
+  setTimeout(() => {
+    void snapshotPredictions(city)
+      .then(() => scorePending(city))
+      .catch(log('accuracy'));
+  }, 60_000);
+  console.log(`[scheduler] accuracy: snapshots hourly at :05, scoring daily at 06:30 (${city.tz})`);
+}
+
 export function startScheduler(city: CityConfig) {
   const opts = { timezone: city.tz, noOverlap: true };
   cron.schedule('30 2 * * *', () => void runNightly(city).catch((e) => console.error('[nightly]', e)), opts);
   cron.schedule('0 6 3 * *', () => void importLatestMonth(city).catch((e) => console.error('[monthly]', e)), opts);
   console.log(`[scheduler] nightly 02:30 and monthly import on the 3rd at 06:00 (${city.tz})`);
+  startAccuracySchedule(city);
 }

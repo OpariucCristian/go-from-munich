@@ -1,0 +1,16 @@
+# Public entry point: HTTPS (Let's Encrypt, renewed automatically) in front of the BFF.
+# SITE_DOMAIN comes from the server's .env, e.g. 92-5-50-6.sslip.io.
+{$SITE_DOMAIN} {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options DENY
+		-Server
+	}
+	reverse_proxy bff:3000
+	log {
+		output stderr
+	}
+}

@@ -5,3 +5,11 @@ models/
 *.log
 ml/.venv/
 __pycache__/
+
+# SSH keys
+*.key
+*.pem
+.ssh/
+
+# Web app build output
+apps/web/dist/

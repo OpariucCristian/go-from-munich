@@ -7,6 +7,9 @@ import { getPool, withTransaction } from '@gfm/db';
 import type pg from 'pg';
 import { LEVELS, dayTypeSql, groupKeySql, hourBandSql } from './groups.ts';
 
+export const DEFAULT_HALF_LIFE_DAYS = 60;
+export const DEFAULT_WINDOW_DAYS = 365;
+
 export interface StatsOptions {
   /** Only events planned before this instant are used (for honest backtests). Default: now. */
   asOf?: Date;
@@ -15,7 +18,7 @@ export interface StatsOptions {
   tz?: string;
 }
 
-const bucketSql = (delay: string, cancelled: string) => `CASE
+export const bucketSql = (delay: string, cancelled: string) => `CASE
   WHEN ${cancelled} THEN 7
   WHEN ${delay} <= 2 THEN 0 WHEN ${delay} <= 5 THEN 1 WHEN ${delay} <= 10 THEN 2
   WHEN ${delay} <= 15 THEN 3 WHEN ${delay} <= 30 THEN 4 WHEN ${delay} <= 60 THEN 5 ELSE 6 END`;
@@ -23,8 +26,8 @@ const bucketSql = (delay: string, cancelled: string) => `CASE
 /** Materialises labelled events (one row per arrival/departure) into temp table `labelled_events`. */
 export async function buildLabelledEvents(c: pg.PoolClient, opts: StatsOptions = {}) {
   const asOf = opts.asOf ?? new Date();
-  const windowDays = opts.windowDays ?? 365;
-  const halfLife = opts.halfLifeDays ?? 60;
+  const windowDays = opts.windowDays ?? DEFAULT_WINDOW_DAYS;
+  const halfLife = opts.halfLifeDays ?? DEFAULT_HALF_LIFE_DAYS;
   const tz = (opts.tz ?? 'Europe/Berlin').replace(/'/g, '');
   const local = `(pt AT TIME ZONE '${tz}')`;
   await c.query('DROP TABLE IF EXISTS labelled_events');

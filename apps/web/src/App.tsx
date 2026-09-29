@@ -1,0 +1,65 @@
+import { NavLink, Outlet, Route, Routes } from 'react-router';
+import { useMeta } from './api.ts';
+import { AccuracyPage } from './pages/AccuracyPage.tsx';
+import { DeparturesPage } from './pages/DeparturesPage.tsx';
+import { EstimatePage } from './pages/EstimatePage.tsx';
+import { PatternsPage } from './pages/PatternsPage.tsx';
+import { SharePage } from './pages/SharePage.tsx';
+
+const NAV = [
+  { to: '/', label: 'Estimate', end: true },
+  { to: '/departures', label: 'Departures', end: false },
+  { to: '/patterns', label: 'Patterns', end: false },
+  { to: '/accuracy', label: 'Accuracy', end: false },
+];
+
+function Shell() {
+  const meta = useMeta().data;
+  const status = meta ? [`Model ${meta.model}`, meta.dataThrough, meta.liveLabel].filter(Boolean).join(' · ') : '';
+  return (
+    <div className="shell">
+      <header className="topbar">
+        <div className="topbar-left">
+          <NavLink to="/" className="brand" aria-label="Spät home">
+            <span className="brand-mark" aria-hidden />
+            <span className="brand-name">Spät</span>
+          </NavLink>
+          <nav className="nav" aria-label="Main">
+            {NAV.map((n) => (
+              <NavLink key={n.to} to={n.to} end={n.end}>
+                {n.label}
+              </NavLink>
+            ))}
+          </nav>
+        </div>
+        <div className="meta">{status}</div>
+      </header>
+      <main className="main">
+        <Outlet />
+      </main>
+      <footer className="footer">{meta?.attribution ?? 'Delay data © Deutsche Bahn AG (CC BY 4.0).'} Forecasts are estimates, not guarantees.</footer>
+      <nav className="tabbar" aria-label="Main">
+        {NAV.map((n) => (
+          <NavLink key={n.to} to={n.to} end={n.end}>
+            {n.label}
+          </NavLink>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
+export function App() {
+  return (
+    <Routes>
+      <Route element={<Shell />}>
+        <Route index element={<EstimatePage />} />
+        <Route path="share" element={<SharePage />} />
+        <Route path="departures" element={<DeparturesPage />} />
+        <Route path="patterns" element={<PatternsPage />} />
+        <Route path="accuracy" element={<AccuracyPage />} />
+        <Route path="*" element={<EstimatePage />} />
+      </Route>
+    </Routes>
+  );
+}

@@ -7,3 +7,5 @@ export * from './features.ts';
 export * from './trainingData.ts';
 export * from './onnx.ts';
 export * from './registry.ts';
+export * from './accuracy.ts';
+export * from './nowcast.ts';

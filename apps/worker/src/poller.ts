@@ -8,7 +8,7 @@
  * `fchg` rows only update trips that a `plan` response already created.
  */
 import { polledStations, toLocalParts, type CityConfig, type StationRef } from '@gfm/core';
-import { copyRowsToStaging, createStaging, mergeStaging, withTransaction, type MergeStats } from '@gfm/db';
+import { copyRowsToStaging, createStaging, mergeStaging, updateTripRoutes, withTransaction, type MergeStats } from '@gfm/db';
 import { IrisClient, parseTimetable, type ParsedStop } from '@gfm/iris';
 
 const HOUR = 3600_000;
@@ -89,7 +89,10 @@ export class Poller {
             const body = await this.client.plan(station.eva, at);
             this.fetchedSlots.add(key);
             this.totals.plan++;
-            if (body) await this.store(this.filter(station, parseTimetable(body, { eva: station.eva, observedAt: new Date() })));
+            if (body) {
+              const rows = this.filter(station, parseTimetable(body, { eva: station.eva, observedAt: new Date() }));
+              await this.store(rows, { routes: true });
+            }
           })(),
         );
       }
@@ -120,12 +123,23 @@ export class Poller {
     );
   }
 
-  private async store(rows: ParsedStop[]): Promise<MergeStats | null> {
+  /**
+   * Merges parsed stops. `routes` also stores each trip's full route; only plan responses carry
+   * complete paths (change rows often hold just the changed half), so only they may set it.
+   */
+  private async store(rows: ParsedStop[], opts: { routes?: boolean } = {}): Promise<MergeStats | null> {
     if (!rows.length) return null;
     const stats = await withTransaction(async (c) => {
       await createStaging(c);
       await copyRowsToStaging(c, rows);
-      return mergeStaging(c);
+      const merged = await mergeStaging(c);
+      if (opts.routes) {
+        await updateTripRoutes(
+          c,
+          rows.flatMap((r) => (r.route ? [{ rideId: r.rideId, originStart: r.originStart, route: r.route }] : [])),
+        );
+      }
+      return merged;
     });
     this.totals.rows += stats.stopEvents;
     this.totals.trips += stats.trips;

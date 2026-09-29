@@ -183,3 +183,32 @@ export async function mergeStaging(client: pg.PoolClient): Promise<MergeStats> {
     observations: observations.rowCount ?? 0,
   };
 }
+
+export interface TripRoute {
+  rideId: string;
+  originStart: string;
+  route: string[];
+}
+
+/**
+ * Stores each trip's full planned route. Several stations report the same trip; the longest
+ * route wins (a station near the end may see a shortened path). Trips not in the database yet
+ * are skipped, so call this after merging the stop events.
+ */
+export async function updateTripRoutes(client: pg.PoolClient, rows: TripRoute[]): Promise<number> {
+  const best = new Map<string, TripRoute>();
+  for (const r of rows) {
+    const key = `${r.rideId}|${r.originStart}`;
+    const cur = best.get(key);
+    if (!cur || r.route.length > cur.route.length) best.set(key, r);
+  }
+  if (!best.size) return 0;
+  const res = await client.query(
+    `UPDATE trips t SET route = ARRAY(SELECT jsonb_array_elements_text(u.route))
+     FROM jsonb_to_recordset($1::jsonb) AS u(ride_id text, origin_start text, route jsonb)
+     WHERE t.ride_id = u.ride_id AND t.origin_start = u.origin_start
+       AND t.route IS DISTINCT FROM ARRAY(SELECT jsonb_array_elements_text(u.route))`,
+    [JSON.stringify([...best.values()].map((r) => ({ ride_id: r.rideId, origin_start: r.originStart, route: r.route })))],
+  );
+  return res.rowCount ?? 0;
+}

@@ -19,8 +19,13 @@ import type { StopEventInput } from '@gfm/db';
 type Attrs = Record<string, string | undefined>;
 type XmlStop = Attrs & { tl?: Attrs; ar?: Attrs; dp?: Attrs };
 
-/** A parsed stop plus the planned route through it (station names before and after). */
-export type ParsedStop = StopEventInput & { path: string[] };
+/**
+ * A parsed stop plus the planned route through it: `path` holds the station names before and
+ * after it, `route` the whole run in order including this station (null when the response
+ * doesn't name the station or carries no path, e.g. most change rows). Changed paths (`cpth`,
+ * diversions) win over planned ones (`ppth`).
+ */
+export type ParsedStop = StopEventInput & { path: string[]; route: string[] | null };
 
 const xml = new XMLParser({
   ignoreAttributes: false,
@@ -57,6 +62,7 @@ export function parseTimetable(body: string, opts: ParseOptions): ParsedStop[] {
   if (!tt || !tt.s) return [];
   const rootEva = tt.eva ? normalizeEva(tt.eva) : normalizeEva(opts.eva);
   const tz = opts.tz ?? 'Europe/Berlin';
+  const stationName = tt.station ?? null;
   const out: ParsedStop[] = [];
 
   for (const s of tt.s) {
@@ -70,6 +76,8 @@ export function parseTimetable(body: string, opts: ParseOptions): ParsedStop[] {
     // Destination: the last station on the planned path after departure; for a terminating stop,
     // the stop itself (unknown here, so leave null).
     const finalDestination = lastOfPath(dp?.cpth ?? dp?.ppth);
+    const before = splitPath(ar?.cpth ?? ar?.ppth);
+    const after = splitPath(dp?.cpth ?? dp?.ppth);
 
     out.push({
       rideId: key.rideId,
@@ -92,7 +100,8 @@ export function parseTimetable(body: string, opts: ParseOptions): ParsedStop[] {
       depStatus: depStatus ?? null,
       source: 'live',
       observedAt: opts.observedAt,
-      path: [...splitPath(ar?.cpth ?? ar?.ppth), ...splitPath(dp?.cpth ?? dp?.ppth)],
+      path: [...before, ...after],
+      route: stationName && (before.length || after.length) ? [...before, stationName, ...after] : null,
     });
   }
   return out;

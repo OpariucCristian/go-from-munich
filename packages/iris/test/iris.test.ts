@@ -30,6 +30,7 @@ describe('parseTimetable', () => {
     });
     expect(ice.plannedDep?.toISOString()).toBe('2026-09-28T13:01:00.000Z');
     expect(ice.path).toContain('Augsburg Hbf');
+    expect(ice.route).toEqual(['München Hbf', 'München-Pasing', 'Augsburg Hbf', 'Ulm Hbf', 'Stuttgart Hbf', 'Hamburg Hbf']);
   });
 
   it('handles terminating trains, lines and added stops', () => {

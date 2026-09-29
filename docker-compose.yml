@@ -1,5 +1,7 @@
 # Local dev: `docker compose up -d db` then `npm run migrate`.
 # Production (Oracle Ampere, arm64): `docker compose --profile app up -d --build`.
+# Postgres, the core API and the BFF only listen on localhost; Caddy (HTTPS on 80/443) is the one
+# public entry point and proxies to the BFF.
 services:
   db:
     image: postgres:17
@@ -8,7 +10,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gofrommunich}
       POSTGRES_DB: gofrommunich
     ports:
-      - "5433:5432"   # 5432 is taken by the host's own Postgres in dev
+      - "127.0.0.1:5433:5432"   # 5432 is taken by the host's own Postgres in dev
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -24,11 +26,25 @@ services:
     environment:
       DATABASE_URL: postgres://gofrommunich:${POSTGRES_PASSWORD:-gofrommunich}@db:5432/gofrommunich
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     volumes:
       - models:/app/models
     depends_on:
       db: { condition: service_healthy }
+    restart: unless-stopped
+
+  # Web app + BFF on one origin: http://localhost:3000 (publicly via caddy)
+  bff:
+    profiles: ["app"]
+    build: .
+    command: ["npx", "tsx", "--tsconfig", "apps/bff/tsconfig.json", "apps/bff/src/main.ts"]
+    environment:
+      CORE_API_URL: http://api:8080
+      BFF_PORT: "3000"
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - api
     restart: unless-stopped
 
   worker:
@@ -45,7 +61,26 @@ services:
       db: { condition: service_healthy }
     restart: unless-stopped
 
+  # HTTPS reverse proxy. Needs SITE_DOMAIN in .env and ports 80/443 open in the cloud firewall.
+  caddy:
+    profiles: ["app"]
+    image: caddy:2
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - bff
+    restart: unless-stopped
+
 volumes:
   pgdata:
   models:
   training:
+  caddy_data:
+  caddy_config:

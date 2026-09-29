@@ -95,3 +95,38 @@ export function connectionFailureProbability(
   const byCancellation = 1 - (1 - a.cancelled) * (1 - d.cancelled);
   return { total: byCancellation + miss, byDelay: miss, byCancellation };
 }
+
+/**
+ * Point summaries of the delay, conditional on the stop not being cancelled: mean and the
+ * 10th/50th/80th/90th percentiles in whole minutes (from the uniform-within-bucket minute pmf).
+ * `p80` is the "80% chance it's at most this late" limit the app shows; a two-sided p10–p90
+ * range doesn't work for delays because most trains are on time, which pins p10 at 0.
+ */
+export function delaySummary(dist: Distribution): {
+  expected: number;
+  median: number;
+  p10: number;
+  p80: number;
+  p90: number;
+} {
+  const { pmf, cancelled } = toMinutePmf(dist);
+  const mass = 1 - cancelled;
+  if (mass <= 0) return { expected: 0, median: 0, p10: 0, p80: 0, p90: 0 };
+  let expected = 0;
+  for (let m = 0; m < pmf.length; m++) expected += (m * pmf[m]!) / mass;
+  const quantile = (q: number) => {
+    let acc = 0;
+    for (let m = 0; m < pmf.length; m++) {
+      acc += pmf[m]! / mass;
+      if (acc >= q - 1e-9) return m;
+    }
+    return pmf.length - 1;
+  };
+  return {
+    expected: Math.round(expected * 10) / 10,
+    median: quantile(0.5),
+    p10: quantile(0.1),
+    p80: quantile(0.8),
+    p90: quantile(0.9),
+  };
+}

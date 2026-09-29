@@ -4,6 +4,7 @@ import {
   bucketOf,
   connectionFailureProbability,
   cumulative,
+  delaySummary,
   irisPlanSlot,
   normalize,
   normalizeEva,
@@ -54,6 +55,18 @@ describe('buckets', () => {
   it('on-time trains with big slack almost never miss', () => {
     const onTime = [1, 0, 0, 0, 0, 0, 0, 0];
     expect(connectionFailureProbability(onTime, onTime, 10).total).toBe(0);
+  });
+
+  it('summarises delay conditional on not being cancelled', () => {
+    expect(delaySummary([1, 0, 0, 0, 0, 0, 0, 0])).toEqual({ expected: 1, median: 1, p10: 0, p80: 2, p90: 2 });
+    // Cancellation mass does not pull the summary: same numbers with half of it cancelled.
+    expect(delaySummary([0.5, 0, 0, 0, 0, 0, 0, 0.5])).toEqual(delaySummary([1, 0, 0, 0, 0, 0, 0, 0]));
+    const s = delaySummary([0.3, 0.2, 0.2, 0.1, 0.1, 0.05, 0.05, 0]);
+    expect(s.p10).toBeLessThanOrEqual(s.median);
+    expect(s.median).toBeLessThanOrEqual(s.p80);
+    expect(s.p80).toBeLessThanOrEqual(s.p90);
+    expect(s.median).toBeGreaterThanOrEqual(3);
+    expect(s.median).toBeLessThanOrEqual(10);
   });
 });
 
