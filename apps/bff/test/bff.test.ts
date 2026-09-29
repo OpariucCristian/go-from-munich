@@ -94,6 +94,17 @@ describe('trip estimate view', () => {
     expect(e.allConnectionsP).toBeNull();
   });
 
+  it('gives every stop of a leg the run reasons found at any of its stops', () => {
+    const reason = { kind: 'cause' as const, text: 'door fault', station: 'Augsburg Hbf', reportedAt: '2026-10-26T14:50:00Z', stops: 1 };
+    const withReason = [{
+      ...legs[0]!,
+      stops: legs[0]!.stops.map((s, i) => (i === 1 ? { ...s, prediction: { ...s.prediction, reasons: [reason] } } : s)),
+    }];
+    const e = tripEstimate(withReason, { model: 'baseline v1', attribution: 'x' });
+    expect(e.legs[0]!.timeline.map((s) => s.reasons.map((r) => r.text))).toEqual([['Door fault'], ['Door fault'], ['Door fault']]);
+    expect(tripEstimate(legs, { model: 'baseline v1', attribution: 'x' }).final.reasons).toEqual([]);
+  });
+
   it('headlines on-time and cancellation-prone stops', () => {
     expect(headlineOf(distributionOf(onTime))).toBe('Likely on time');
     expect(headlineOf(distributionOf(pred([0.5, 0.1, 0.05, 0, 0, 0, 0, 0.35])))).toBe('High risk of cancellation');

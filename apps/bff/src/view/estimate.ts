@@ -58,7 +58,12 @@ export function stopView(s: TimelineStop, trainType: string, trainNumber: string
 
 export function legView(leg: LegInput): LegView {
   if (leg.stops.length < 2) throw new Error('a leg needs a departure and an arrival');
-  const timeline = leg.stops.map((s) => stopView(s, leg.trainType, leg.trainNumber));
+  // Every stop of a leg is the same run, but the core only finds the run's reasons at stops the
+  // poller watches; stops in between share them.
+  const reasons = leg.stops.find((s) => s.prediction.reasons?.length)?.prediction.reasons;
+  const timeline = leg.stops.map((s) =>
+    stopView(reasons && !s.prediction.reasons?.length ? { ...s, prediction: { ...s.prediction, reasons } } : s, leg.trainType, leg.trainNumber),
+  );
   const from = timeline[0]!;
   const to = timeline.at(-1)!;
   return {
