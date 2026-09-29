@@ -1,8 +1,24 @@
 import { BadRequestException, Controller, Get, Inject, Query } from '@nestjs/common';
-import type { AccuracyView, ConnectionsView, DeparturesView, MetaView, PatternsView, StationOption } from '../contract.ts';
+import type {
+  AccuracyRunsView,
+  AccuracyRunView,
+  AccuracyView,
+  ConnectionsView,
+  DeparturesView,
+  MetaView,
+  PatternsView,
+  StationOption,
+} from '../contract.ts';
 import { CoreApi } from '../core/coreApi.ts';
-import type { CoreAccuracy, CoreConnections, CoreDepartures, CorePatterns } from '../core/types.ts';
-import { accuracyView } from '../view/accuracy.ts';
+import type {
+  CoreAccuracy,
+  CoreAccuracyRun,
+  CoreAccuracyRuns,
+  CoreConnections,
+  CoreDepartures,
+  CorePatterns,
+} from '../core/types.ts';
+import { accuracyRunsView, accuracyRunView, accuracyView } from '../view/accuracy.ts';
 import { connectionsView, departuresView, patternsView } from '../view/explore.ts';
 import { MetaService } from './meta.service.ts';
 
@@ -10,6 +26,8 @@ const GROUPS = ['all', 'long', 'regional'];
 const SOURCES = ['all', 'live', 'replay', 'near'];
 const EVA = /^0?\d{7}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const RUN_SORTS = ['miss', 'recent'];
+const RUN = /^(\d{4}-\d{2}-\d{2})\.(\d{1,18})\.(live|replay|near)$/;
 
 function check(ok: boolean, message: string) {
   if (!ok) throw new BadRequestException(message);
@@ -69,5 +87,28 @@ export class ExploreController {
     check(/^\d{1,3}$/.test(days) && Number(days) >= 1 && Number(days) <= 365, 'days must be 1–365');
     check(SOURCES.includes(source), 'source must be all, live or replay');
     return accuracyView(await this.core.get<CoreAccuracy>('/accuracy', { days, source }));
+  }
+
+  @Get('accuracy/runs')
+  async accuracyRuns(
+    @Query('days') days = '30',
+    @Query('source') source = 'all',
+    @Query('sort') sort = 'miss',
+    @Query('train') train = '',
+  ): Promise<AccuracyRunsView> {
+    check(/^\d{1,3}$/.test(days) && Number(days) >= 1 && Number(days) <= 365, 'days must be 1–365');
+    check(SOURCES.includes(source), 'source must be all, live or replay');
+    check(RUN_SORTS.includes(sort), 'sort must be miss or recent');
+    check(train.length <= 30, 'train must be at most 30 characters');
+    const core = await this.core.get<CoreAccuracyRuns>('/accuracy/runs', { days, source, sort, train: train.trim() || undefined });
+    return accuracyRunsView(core);
+  }
+
+  @Get('accuracy/run')
+  async accuracyRun(@Query('run') run = ''): Promise<AccuracyRunView> {
+    const m = RUN.exec(run);
+    check(!!m, 'run must be <date>.<tripId>.<live|replay|near>');
+    const [, date, trip, source] = m!;
+    return accuracyRunView(await this.core.get<CoreAccuracyRun>('/accuracy/run', { date, trip, source }));
   }
 }

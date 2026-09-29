@@ -2,12 +2,15 @@
 import type {
   AccuracyBreakdownRow,
   AccuracyMiss,
+  AccuracyRunRow,
+  AccuracyRunsView,
+  AccuracyRunView,
   AccuracyStat,
   AccuracyView,
   CalibrationPoint,
   Tone,
 } from '../contract.ts';
-import type { CoreAccuracy, CoreAccuracyMetrics } from '../core/types.ts';
+import type { CoreAccuracy, CoreAccuracyMetrics, CoreAccuracyRun, CoreAccuracyRuns, CoreRunSummary } from '../core/types.ts';
 import { dateLabelOf, pct, shortDateOf, signedMin, timeOf } from './format.ts';
 
 /** Calibration bins with fewer predictions than this are hidden from the chart. */
@@ -123,6 +126,77 @@ function missOf(m: CoreAccuracy['misses'][number]): AccuracyMiss {
       : `Likely ${signedMin(m.predictedMedian)} · ${pct(risk)} risk`,
     actual: m.cancelled ? 'Cancelled' : `${signedMin(m.observedDelay ?? 0)} min`,
     source: m.source,
+    run: runKey(m),
+  };
+}
+
+/** URL-safe id of a run, parsed back by the controller. */
+export const runKey = (r: { date: string; tripId: string; source: string }) => `${r.date}.${r.tripId}.${r.source}`;
+
+/** A run reads as good when its typical miss is small and the 80% limit mostly held. */
+function runTone(r: CoreRunSummary): Tone | 'neutral' {
+  if (r.maeMin === null || r.within80 === null) return 'neutral';
+  if (r.maeMin <= 3 && r.within80 >= 0.75) return 'good';
+  if (r.maeMin <= 8 && r.within80 >= 0.5) return 'warn';
+  return 'bad';
+}
+
+const round1 = (x: number | null) => (x === null ? null : Math.round(x * 10) / 10);
+
+function runRowOf(r: CoreRunSummary): AccuracyRunRow {
+  return {
+    run: runKey(r),
+    train: `${r.trainType} ${r.trainNumber}`,
+    trainType: r.trainType,
+    trainNumber: r.trainNumber,
+    date: r.date,
+    dateLabel: dateLabelOf(r.date),
+    time: timeOf(r.firstPlanned),
+    source: r.source,
+    stops: r.stops,
+    cancelled: r.cancelled,
+    predicted: round1(r.predictedMedian),
+    actual: round1(r.observedDelay),
+    maeMin: round1(r.maeMin),
+    within80: r.within80,
+    tone: runTone(r),
+  };
+}
+
+export function accuracyRunsView(core: CoreAccuracyRuns): AccuracyRunsView {
+  return { runs: core.runs.map(runRowOf), total: core.total };
+}
+
+const leadLabel = (min: number) => (min < 60 ? `${Math.max(0, Math.round(min))} min ahead` : `${Math.round(min / 60)}h ahead`);
+
+export function accuracyRunView(core: CoreAccuracyRun): AccuracyRunView {
+  const r = core.run;
+  const ran = r.stops - r.cancelled;
+  const parts: string[] = [];
+  if (ran && r.predictedMedian !== null && r.observedDelay !== null) {
+    parts.push(`Said ${signedMin(r.predictedMedian)} on average, was ${signedMin(r.observedDelay)}.`);
+    const kept = Math.round((r.within80 ?? 0) * ran);
+    parts.push(`Typical miss ${r.maeMin!.toFixed(1)} min, ${kept} of ${ran} within the 80% limit.`);
+  }
+  if (r.cancelled) parts.push(`${r.cancelled} ${r.cancelled === 1 ? 'stop was' : 'stops were'} cancelled.`);
+  return {
+    run: runRowOf(r),
+    model: r.modelVersions.map(modelLabel).join(', '),
+    summary: parts.join(' '),
+    stops: core.stops.map((s) => ({
+      station: s.station,
+      eva: s.eva,
+      event: s.event === 'a' ? 'arr' : 'dep',
+      time: timeOf(s.planned),
+      lead: leadLabel(s.leadMin),
+      predicted: s.predictedMedian,
+      limit80: s.predictedP80,
+      late5: s.predictedLate5,
+      cancelRisk: s.predictedCancelled,
+      actual: s.cancelled ? null : Math.max(0, s.observedDelay ?? 0),
+      cancelled: s.cancelled,
+      within80: s.within80,
+    })),
   };
 }
 

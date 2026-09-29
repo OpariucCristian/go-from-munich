@@ -1,6 +1,9 @@
 /** Typed client for the BFF plus the React Query hooks each screen uses. */
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type {
+  AccuracyRunSort,
+  AccuracyRunsView,
+  AccuracyRunView,
   AccuracySource,
   AccuracyView,
   ConnectionsView,
@@ -107,6 +110,24 @@ export const useAccuracy = (days: string, source: AccuracySource) =>
     queryFn: () => request<AccuracyView>(`/bff/accuracy?${qs({ days, source })}`),
     staleTime: 10 * 60_000,
     placeholderData: keepPreviousData,
+  });
+
+/** Scored train runs in the window, with predicted vs actual delay. */
+export const useAccuracyRuns = (days: string, source: AccuracySource, sort: AccuracyRunSort, train: string) =>
+  useQuery({
+    queryKey: ['accuracy-runs', days, source, sort, train],
+    queryFn: () => request<AccuracyRunsView>(`/bff/accuracy/runs?${qs({ days, source, sort, train: train || undefined })}`),
+    staleTime: 10 * 60_000,
+    placeholderData: keepPreviousData,
+  });
+
+/** One run stop by stop; `run` is an AccuracyRunRow.run key. */
+export const useAccuracyRun = (run: string | null) =>
+  useQuery({
+    queryKey: ['accuracy-run', run],
+    queryFn: () => request<AccuracyRunView>(`/bff/accuracy/run?${qs({ run: run! })}`),
+    enabled: !!run,
+    staleTime: 10 * 60_000,
   });
 
 /** The train the Estimate screen opens with (largest predicted delay coming up at the hubs). */

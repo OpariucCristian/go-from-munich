@@ -249,12 +249,37 @@ button { cursor: pointer; }
 .acc-table tbody th { font-weight: 600; }
 .acc-breakdown { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 32px; }
 .acc-misses { display: flex; flex-direction: column; }
+.acc-miss-row { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); }
+.acc-miss-row:last-child { border-bottom: 0; }
+.acc-miss-run { flex: none; }
 .acc-miss {
+  flex: 1; min-width: 0;
   display: grid; grid-template-columns: 96px minmax(0, 1fr) minmax(0, 220px) 90px; gap: 12px; align-items: center;
-  padding: 10px 0; border-bottom: 1px solid var(--line); text-decoration: none;
+  padding: 10px 0; text-decoration: none;
 }
-.acc-miss:last-child { border-bottom: 0; }
 .acc-miss:hover { background: var(--paper); }
+.acc-run-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.acc-run-filter { width: 150px; padding: 4px 12px; }
+.acc-run-row { cursor: pointer; }
+.acc-run-row:hover, .acc-run-row.selected { background: var(--paper); }
+.acc-run-row.selected td:first-child { box-shadow: inset 3px 0 0 var(--ink); }
+.acc-run-open { background: none; border: 0; padding: 0 0 0 8px; cursor: pointer; color: inherit; }
+.acc-run-list { max-height: 520px; overflow-y: auto; }
+.acc-run-more { font-size: 13px; padding-top: 8px; }
+.acc-run-detail { border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; background: var(--paper); }
+.acc-run-title { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.acc-run-actions { display: flex; gap: 8px; }
+.acc-run-actions a.chip { text-decoration: none; }
+.acc-chart .run-band { fill: var(--track); }
+.acc-chart .run-gap { stroke: var(--rail); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.acc-chart .run-said { fill: var(--surface); stroke: var(--ink); stroke-width: 2; }
+.acc-chart .run-cancel { fill: var(--bad); font: 700 16px var(--sans); }
+.acc-chart rect[tabindex]:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.acc-legend span { margin-right: 12px; }
+.run-key { display: inline-block; width: 10px; height: 10px; margin-right: 5px; vertical-align: -1px; border-radius: 50%; }
+.run-key-band { background: var(--track); border-radius: 2px; border: 1px solid var(--rail); }
+.run-key-said { border: 2px solid var(--ink); }
+.run-key-was { background: var(--good); box-shadow: 5px 0 0 -2px var(--bad); margin-right: 9px; }
 .acc-miss .train-tag { justify-self: start; }
 .acc-miss-where { display: flex; flex-direction: column; min-width: 0; }
 .acc-miss-where strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
