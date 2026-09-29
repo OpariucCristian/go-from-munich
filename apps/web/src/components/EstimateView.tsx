@@ -125,7 +125,7 @@ export function EstimateView({ estimate }: { estimate: TripEstimate }) {
                 <dt>Live now</dt>
                 <dd>
                   {stop.live.label}
-                  {stop.live.cause && <span className="muted"> · {stop.live.cause}</span>}
+                  {stop.live.cause && !stop.reasons.length && <span className="muted"> · {stop.live.cause}</span>}
                 </dd>
               </div>
             )}
@@ -136,14 +136,7 @@ export function EstimateView({ estimate }: { estimate: TripEstimate }) {
               </div>
             )}
           </dl>
-          <div className="notice">
-            <b>{stop.confidence.level[0]!.toUpperCase() + stop.confidence.level.slice(1)} confidence.</b> {stop.confidence.text}.
-          </div>
-          {stop.sighting && (
-            <div className="notice">
-              <b>Live.</b> {stop.sighting.label}.
-            </div>
-          )}
+          <Signals stop={stop} />
           {estimate.timetableNote && <div className="notice">{estimate.timetableNote}.</div>}
           {estimate.warnings.map((w) => (
             <div className="notice" key={w}>
@@ -178,5 +171,38 @@ function StopRow(props: { stop: StopView; first: boolean; last: boolean; selecte
       </span>
       <span className={`stop-exp ${toneClass(s.tone)}`}>{s.typicalLabel}</span>
     </button>
+  );
+}
+
+/** What went into the selected stop's forecast, and the delay reasons DB reported for the run. */
+function Signals({ stop }: { stop: StopView }) {
+  return (
+    <>
+      <section className="signals" aria-label="Why this forecast">
+        <div className="signals-title">Why this forecast</div>
+        <ul>
+          {stop.signals.map((s) => (
+            <li key={s.kind} className={s.tone === 'warn' ? 'signal warn' : 'signal'}>
+              <span className="signal-title">{s.title}</span>
+              <span>{s.text}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+      {stop.reasons.length > 0 && (
+        <section className="signals" aria-label="Reported by DB">
+          <div className="signals-title">Reported by DB for this run</div>
+          <ul>
+            {stop.reasons.map((r) => (
+              <li key={`${r.kind}-${r.text}`} className="signal reason">
+                <span className="reason-text">{r.text}</span>
+                <span className="muted">{r.detail}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="muted signals-note">DB's stated reasons, for context. The forecast doesn't use them yet.</div>
+        </section>
+      )}
+    </>
   );
 }

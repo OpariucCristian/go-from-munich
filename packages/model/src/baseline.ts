@@ -10,6 +10,7 @@ import { getPool } from '@gfm/db';
 import type pg from 'pg';
 import { groupKeys, type Level, type StopQuery } from './groups.ts';
 import type { Sighting } from './nowcast.ts';
+import type { WeatherSnapshot } from './weather.ts';
 
 export interface StatRow {
   level: number;
@@ -26,6 +27,8 @@ export interface StopPrediction {
   supportN: number;
   /** Set when a live sighting of the train changed the distribution (see nowcast.ts). */
   sighting?: Sighting;
+  /** The weather a model scored this stop with; unset when no model used weather for it. */
+  weather?: WeatherSnapshot;
 }
 
 export const DEFAULT_ALPHA = 8;

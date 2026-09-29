@@ -61,8 +61,22 @@ const sum3h = (byHour: Map<number, WeatherHour>, h: number, key: 'precip' | 'sno
 
 const finite = (xs: number[]) => xs.filter(Number.isFinite);
 
-/** Features for the hour of `planned`, in tenths; NaN where the data is missing (LightGBM handles NaN). */
-export function weatherFeatures(planned: Date, table: WeatherTable, homeId: string): number[] {
+/**
+ * The weather the model sees for the hour of `planned`, in natural units (°C, mm and cm over the
+ * last 3 hours, km/h); NaN where the data is missing. Same order as WEATHER_FEATURE_NAMES.
+ */
+export interface WeatherSnapshot {
+  tempC: number;
+  precip3h: number;
+  snow3h: number;
+  gustKmh: number;
+  regionTempMin: number;
+  regionPrecip3hMax: number;
+  regionSnow3hMax: number;
+  regionGustMax: number;
+}
+
+export function weatherSnapshot(planned: Date, table: WeatherTable, homeId: string): WeatherSnapshot {
   const h = hourOf(planned);
   const home = table.get(homeId);
   const now = home?.get(h);
@@ -73,17 +87,34 @@ export function weatherFeatures(planned: Date, table: WeatherTable, homeId: stri
   const gusts = finite(points.map((p) => p.get(h)?.gust ?? NaN));
   const min = (xs: number[]) => (xs.length ? Math.min(...xs) : NaN);
   const max = (xs: number[]) => (xs.length ? Math.max(...xs) : NaN);
-  return [
-    now?.temp ?? NaN,
-    home ? sum3h(home, h, 'precip') : NaN,
-    home ? sum3h(home, h, 'snow') : NaN,
-    now?.gust ?? NaN,
-    min(temps),
-    max(precips),
-    max(snows),
-    max(gusts),
-  ].map(tenths);
+  return {
+    tempC: now?.temp ?? NaN,
+    precip3h: home ? sum3h(home, h, 'precip') : NaN,
+    snow3h: home ? sum3h(home, h, 'snow') : NaN,
+    gustKmh: now?.gust ?? NaN,
+    regionTempMin: min(temps),
+    regionPrecip3hMax: max(precips),
+    regionSnow3hMax: max(snows),
+    regionGustMax: max(gusts),
+  };
 }
+
+/** Features for the hour of `planned`, in tenths; NaN where the data is missing (LightGBM handles NaN). */
+export function weatherFeatures(planned: Date, table: WeatherTable, homeId: string): number[] {
+  return snapshotFeatures(weatherSnapshot(planned, table, homeId));
+}
+
+export const snapshotFeatures = (w: WeatherSnapshot): number[] =>
+  [
+    w.tempC,
+    w.precip3h,
+    w.snow3h,
+    w.gustKmh,
+    w.regionTempMin,
+    w.regionPrecip3hMax,
+    w.regionSnow3hMax,
+    w.regionGustMax,
+  ].map(tenths);
 
 /**
  * Values in whole tenths (31.7 °C → 317). Integers are exact in float32, so ONNX (float32 split

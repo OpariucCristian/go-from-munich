@@ -14,6 +14,7 @@ import {
   timeOf,
   toneOf,
 } from './format.ts';
+import { reasonViews, signalsOf } from './signals.ts';
 
 export interface TimelineStop {
   name: string;
@@ -50,6 +51,8 @@ export function stopView(s: TimelineStop, trainType: string, trainNumber: string
     confidence: confidenceOf(p.prediction, `${trainType} ${trainNumber}`, trainType),
     live: liveOf(p.live),
     sighting: sightingOf(p.prediction),
+    signals: signalsOf(p.prediction, `${trainType} ${trainNumber}`, trainType),
+    reasons: reasonViews(p.reasons),
   };
 }
 

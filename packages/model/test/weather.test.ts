@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { WEATHER_FEATURE_NAMES, weatherFeatures, type WeatherTable } from '../src/weather.ts';
+import { WEATHER_FEATURE_NAMES, snapshotFeatures, weatherFeatures, weatherSnapshot, type WeatherTable } from '../src/weather.ts';
 
 const h = (iso: string) => Date.parse(iso);
 const table: WeatherTable = new Map([
@@ -23,5 +23,17 @@ describe('weatherFeatures', () => {
   it('returns NaN where there is no data', () => {
     const f = weatherFeatures(new Date('2027-01-01T00:00:00Z'), table, 'muc');
     expect(f.every((x) => Number.isNaN(x))).toBe(true);
+  });
+});
+
+describe('weatherSnapshot', () => {
+  it('is what the model sees, in natural units', () => {
+    const at = new Date('2026-01-10T10:37:00Z');
+    const w = weatherSnapshot(at, table, 'muc');
+    expect(w).toEqual({
+      tempC: -4, precip3h: 3, snow3h: 3.5, gustKmh: 50,
+      regionTempMin: -9, regionPrecip3hMax: 6, regionSnow3hMax: 4, regionGustMax: 85,
+    });
+    expect(snapshotFeatures(w)).toEqual(weatherFeatures(at, table, 'muc'));
   });
 });

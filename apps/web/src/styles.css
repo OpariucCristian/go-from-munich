@@ -338,3 +338,15 @@ button { cursor: pointer; }
   .acc-miss-said { grid-area: said; }
   .acc-miss-was { grid-area: was; }
 }
+
+/* ---------- why this forecast ---------- */
+.signals { display: flex; flex-direction: column; gap: 8px; }
+.signals-title { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.signals ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.signal { display: flex; flex-direction: column; gap: 2px; font-size: 14px; line-height: 1.4; background: var(--sunken); border-radius: var(--r); padding: 9px 14px; border-left: 3px solid var(--rail); }
+.signal.warn { border-left-color: var(--warn); }
+.signal-title { font-size: 12px; font-weight: 600; color: var(--muted); }
+.signal.reason { background: none; border: 1px solid var(--line); border-left: 3px solid var(--bad); }
+.reason-text { font-weight: 600; }
+.signal.reason .muted { font-size: 13px; }
+.signals-note { font-size: 12px; }
