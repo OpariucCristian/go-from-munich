@@ -53,18 +53,30 @@ export function weatherSignal(w: CoreWeather): SignalView | null {
 export function signalsOf(p: CorePrediction, train: string, trainType: string): SignalView[] {
   const out: SignalView[] = [];
   const s = sightingOf(p);
-  if (s) out.push({ kind: 'live', title: 'Seen running', text: s.label, tone: s.delayMin > 5 ? 'warn' : 'neutral' });
+  if (s) {
+    const seen = s.delayMin <= 2 ? 'On time' : `+${s.delayMin} min`;
+    out.push({ kind: 'live', title: 'Seen running', text: `${seen} at ${s.name}, ${p.sighting!.gapMin} min earlier`, tone: s.delayMin > 5 ? 'warn' : 'neutral' });
+  }
   const w = p.weather ? weatherSignal(p.weather) : null;
   if (w) out.push(w);
   const c = confidenceOf(p, train, trainType);
-  out.push({ kind: 'history', title: `History · ${c.level} confidence`, text: c.text, tone: c.level === 'low' ? 'warn' : 'neutral' });
+  out.push({ kind: 'history', title: `History · ${c.level} confidence`, text: historyText(p, train, trainType), tone: c.level === 'low' ? 'warn' : 'neutral' });
   return out;
+}
+
+/** confidenceOf's wording, shortened for a signal cell whose title already says it's history. */
+function historyText(p: CorePrediction, train: string, trainType: string): string {
+  const { level, observations: n } = p.support;
+  if (level <= 2 && n >= 30) return `${n} past runs of ${train} here`;
+  if (level <= 2) return `${n} past runs of ${train} here, plus similar trains`;
+  if (level <= 4) return `${trainType} trains at this station`;
+  return `Little data for this stop: ${trainType} trains overall`;
 }
 
 export function reasonViews(reasons: CoreReason[] | undefined): ReasonView[] {
   return (reasons ?? []).map((r) => {
     const others = r.stops > 1 ? ` · ${r.stops} stops` : '';
-    const where = r.station ? `at ${r.station}, ` : '';
-    return { kind: r.kind, text: capitalize(r.text), detail: `Reported ${where}${timeOf(r.reportedAt)}${others}` };
+    const where = r.station ? `${r.station}, ` : '';
+    return { kind: r.kind, text: capitalize(r.text), detail: `${where}${timeOf(r.reportedAt)}${others}` };
   });
 }

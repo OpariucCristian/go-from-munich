@@ -4,7 +4,7 @@ import { CoreApi } from '../src/core/coreApi.ts';
 import type { CorePrediction, CoreStopPrediction, CoreTrainStops } from '../src/core/types.ts';
 import { EstimateService, parseTrain, timelineQueries } from '../src/estimate/estimate.service.ts';
 import { MetaService } from '../src/explore/meta.service.ts';
-import { featuredView, headlineOf, tripEstimate } from '../src/view/estimate.ts';
+import { featuredView, headlineOf, heroOf, tripEstimate } from '../src/view/estimate.ts';
 import { accuracyRunsView, accuracyRunView, accuracyView } from '../src/view/accuracy.ts';
 import { patternsView } from '../src/view/explore.ts';
 import { confidenceOf, dateLabelOf, distributionOf, durationLabel, timeOf, toneOf } from '../src/view/format.ts';
@@ -108,6 +108,19 @@ describe('trip estimate view', () => {
   it('headlines on-time and cancellation-prone stops', () => {
     expect(headlineOf(distributionOf(onTime))).toBe('Likely on time');
     expect(headlineOf(distributionOf(pred([0.5, 0.1, 0.05, 0, 0, 0, 0, 0.35])))).toBe('High risk of cancellation');
+  });
+
+  it('states the answer once, as a figure and two lines', () => {
+    expect(heroOf(distributionOf(late), 'Stuttgart Hbf', '2026-10-26T16:43:00Z', 'arrival')).toEqual({
+      figure: '+9',
+      label: 'min late at Stuttgart Hbf',
+      sub: 'Arrives around 17:52 · scheduled 17:43 · 8% chance of cancellation',
+    });
+    expect(heroOf(distributionOf(onTime), 'München Hbf', '2026-10-26T14:28:00Z', 'departure')).toEqual({
+      figure: '+1',
+      label: 'min · likely on time leaving München Hbf',
+      sub: 'Departs around 15:29 · scheduled 15:28',
+    });
   });
 });
 

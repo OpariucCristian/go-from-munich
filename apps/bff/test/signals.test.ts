@@ -28,14 +28,14 @@ describe('signalsOf', () => {
       'RE',
     );
     expect(s.map((x) => [x.kind, x.tone])).toEqual([['live', 'warn'], ['weather', 'neutral'], ['history', 'neutral']]);
-    expect(s[0]!.text).toBe('Based on +12 min at Augsburg Hbf, 40 min earlier');
+    expect(s[0]!.text).toBe('+12 min at Augsburg Hbf, 40 min earlier');
     expect(s[1]!.text).toBe('14 °C, dry, gusts 22 km/h in Munich');
-    expect(s[2]!.text).toBe('Based on 42 past runs of RE 4012 here');
+    expect(s[2]!.text).toBe('42 past runs of RE 4012 here');
   });
 
   it('shows only history when the model used nothing else', () => {
     const s = signalsOf(pred({ support: { level: 6, observations: 3 } }), 'RE 4012', 'RE');
-    expect(s).toEqual([{ kind: 'history', title: 'History · low confidence', text: 'Little data for this stop: based on RE trains overall', tone: 'warn' }]);
+    expect(s).toEqual([{ kind: 'history', title: 'History · low confidence', text: 'Little data for this stop: RE trains overall', tone: 'warn' }]);
   });
 });
 
@@ -50,12 +50,12 @@ describe('weatherSignal', () => {
 });
 
 describe('reasonViews', () => {
-  it('capitalizes the reason and says where and when it was reported', () => {
+  it('capitalizes the reason and says where and when it was last reported', () => {
     const r = reasonViews([
       { kind: 'cause', text: 'delay of a train ahead', station: 'Augsburg Hbf', reportedAt: '2026-09-29T14:40:00Z', stops: 3 },
     ]);
     expect(r).toEqual([
-      { kind: 'cause', text: 'Delay of a train ahead', detail: `Reported at Augsburg Hbf, ${timeOf('2026-09-29T14:40:00Z')} · 3 stops` },
+      { kind: 'cause', text: 'Delay of a train ahead', detail: `Augsburg Hbf, ${timeOf('2026-09-29T14:40:00Z')} · 3 stops` },
     ]);
     expect(reasonViews(undefined)).toEqual([]);
   });

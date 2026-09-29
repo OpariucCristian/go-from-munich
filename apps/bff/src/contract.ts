@@ -58,6 +58,8 @@ export interface StopView {
   tone: Tone;
   headline: string; // 'Likely about 9 minutes late'
   sentence: string; // 'Most likely arrival is 17:21. …'
+  /** The answer at a glance: '+24' · 'min late at München Ost' · 'Arrives around 19:56 · scheduled 19:32'. */
+  hero: { figure: string; label: string; sub: string };
   dist: DistributionView;
   confidence: Confidence;
   live: LiveView | null;
