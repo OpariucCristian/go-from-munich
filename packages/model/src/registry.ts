@@ -93,11 +93,11 @@ export async function loadActivePredictor(city: CityConfig): Promise<ServingPred
 async function loadActiveModel(city: CityConfig): Promise<{ predictor: ServingPredictor; id: number | null }> {
   const { rows } = await getPool().query<{
     id: number; kind: string; version: string; artifact_path: string | null; feature_version: number | null;
-    stacking: Stacking | null; ref_floor: number | null; applies_to: AppliesTo | null;
+    stacking: Stacking | null; ref_floor: number | null; applies_to: AppliesTo | null; weather_dropped: boolean | null;
   }>(
     `SELECT id, kind, version, artifact_path, (metrics->>'featureVersion')::int AS feature_version,
             metrics->>'stacking' AS stacking, (metrics->>'refFloor')::float8 AS ref_floor,
-            metrics->>'appliesTo' AS applies_to
+            metrics->>'appliesTo' AS applies_to, metrics->'droppedFeatures' ? 'wx_temp_c' AS weather_dropped
      FROM models WHERE is_active`,
   );
   const active = rows[0];
@@ -109,6 +109,7 @@ async function loadActiveModel(city: CityConfig): Promise<{ predictor: ServingPr
         stacking: active.stacking ?? 'none',
         refFloor: active.ref_floor ?? undefined,
         appliesTo: active.applies_to ?? 'all',
+        usesWeather: !active.weather_dropped,
       };
       return { predictor: await OnnxPredictor.load(active.version, active.artifact_path, city, opts), id: active.id };
     } catch (err) {

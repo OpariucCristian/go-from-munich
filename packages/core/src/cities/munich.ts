@@ -23,12 +23,15 @@ export const munich: CityConfig = {
     { eva: '8000170', name: 'Ulm Hbf' },
   ],
   // Seen before they reach the corridor: Rosenheim traffic from Austria, Augsburg/Nürnberg
-  // traffic from Stuttgart and Würzburg. EVAs from the IRIS station lookup.
+  // traffic from Stuttgart and Würzburg, ICEs from Erfurt (Berlin line) and Mannheim (Rhine line)
+  // before Nürnberg and Stuttgart/Ulm. EVAs from the IRIS station lookup.
   upstream: [
     { eva: '8100002', name: 'Salzburg Hbf' },
     { eva: '8100001', name: 'Kufstein' },
     { eva: '8000096', name: 'Stuttgart Hbf' },
     { eva: '8000260', name: 'Würzburg Hbf' },
+    { eva: '8010101', name: 'Erfurt Hbf' },
+    { eva: '8000244', name: 'Mannheim Hbf' },
   ],
   // The city plus the main lines' approaches, for local and "worst along the way" weather.
   weatherPoints: [

@@ -12,9 +12,12 @@ is exactly the reference. Serving adds the ONNX output (raw tree scores) to the 
 softmax(log ref + trees), recorded as metrics.stacking = "logit-offset".
 "--objective multiclass --rows all" trains the older standalone softmax model.
 
-Defaults are the best configuration found so far (2026-09-29 sweep, ml/sweep.py): the trees only
-correct stops with a live sighting (--rows sighted), weather is left out (it learned
-period-specific shifts that did not carry over), and conservative tree settings.
+Defaults are the best configuration found so far: the trees correct stops forecast at most 4 h
+ahead (--rows near, features v4; 2026-09-30), weather is left out (it learned period-specific
+shifts that did not carry over, 2026-09-29 sweep in ml/sweep.py), and so is the network state:
+trained on the historical data it changed nothing (validation RPS 0.10370 with and without), most
+likely because that data records delays from a snapshot every 6 hours, not as they happened.
+Retry it once there are a few weeks of live polling data. Conservative tree settings.
 
     python train.py --data ../data/training --out ../models/lgbm-20260928
 """
@@ -34,6 +37,7 @@ NUM_BUCKETS = 8
 REF_FLOOR = 1e-6
 WEATHER_FEATURES = ["wx_temp_c", "wx_precip_3h", "wx_snow_3h", "wx_gust_kmh",
                     "wx_region_temp_min", "wx_region_precip_3h_max", "wx_region_snow_3h_max", "wx_region_gust_max"]
+NETWORK_FEATURES = ["net_stn_n", "net_stn_delay", "net_stn_late5", "net_hub_n", "net_hub_delay", "net_hub_late5"]
 
 
 def rps(probs: np.ndarray, labels: np.ndarray) -> float:
@@ -205,10 +209,11 @@ def main() -> None:
     ap.add_argument("--min-child-samples", type=int, default=5000)
     ap.add_argument("--reg-lambda", type=float, default=50.0)
     ap.add_argument("--early-stop-chunks", type=int, default=4)
-    ap.add_argument("--drop-features", default=",".join(WEATHER_FEATURES),
+    ap.add_argument("--drop-features", default=",".join(WEATHER_FEATURES + NETWORK_FEATURES),
                     help='comma-separated features the trees may not use ("" for none)')
-    ap.add_argument("--rows", choices=["all", "sighted"], default="sighted",
-                    help="sighted: train on, and correct, only rows with a live sighting; others keep the reference")
+    ap.add_argument("--rows", choices=["all", "sighted", "near"], default="near",
+                    help="sighted: train on, and correct, only rows with a live sighting; near: only rows "
+                         "forecast at most 4 h ahead (lead_min set); others keep the reference")
     args = ap.parse_args()
 
     meta = json.loads((args.data / "meta.json").read_text())
@@ -221,7 +226,15 @@ def main() -> None:
     gap_col = features.index("seen_gap_min") if "seen_gap_min" in features else None
     sighted_t = ~np.isnan(X[:, gap_col]) if gap_col is not None else np.zeros(len(y), bool)
     sighted = ~np.isnan(Xv[:, gap_col]) if gap_col is not None else np.zeros(len(yv), bool)
-    dropped = [f for f in args.drop_features.split(",") if f and (f in features or f not in WEATHER_FEATURES)]
+    # Rows forecast at most 4 h ahead, with network state (features v4).
+    lead_col = features.index("lead_min") if "lead_min" in features else None
+    near_t = ~np.isnan(X[:, lead_col]) if lead_col is not None else sighted_t
+    near = ~np.isnan(Xv[:, lead_col]) if lead_col is not None else sighted
+    # The rows the model corrects; the rest are served the reference.
+    applied_t = {"sighted": sighted_t, "near": near_t}.get(args.rows)
+    applied = {"sighted": sighted, "near": near}.get(args.rows)
+    dropped = [f for f in args.drop_features.split(",")
+               if f and (f in features or f not in WEATHER_FEATURES + NETWORK_FEATURES)]
     blank_features(X, features, dropped)
     print(f"train {X.shape}, valid {Xv.shape}, objective {args.objective}")
 
@@ -232,20 +245,20 @@ def main() -> None:
     split = sum(c["rows"] for c in train_chunks[: -args.early_stop_chunks])
     if split == 0 or split >= len(y):
         raise SystemExit("need at least two training chunks")
-    if args.rows == "sighted":
-        if args.objective != "rps" or gap_col is None:
-            raise SystemExit("--rows sighted needs --objective rps and sighting features")
-        split = int(sighted_t[:split].sum())
-        X, y, ref_t = X[sighted_t], y[sighted_t], ref_t[sighted_t]
-        print(f"sighted rows only: train {X.shape}")
+    if applied_t is not None:
+        if args.objective != "rps" or gap_col is None or (args.rows == "near" and lead_col is None):
+            raise SystemExit(f"--rows {args.rows} needs --objective rps and the matching features")
+        split = int(applied_t[:split].sum())
+        X, y, ref_t = X[applied_t], y[applied_t], ref_t[applied_t]
+        print(f"{args.rows} rows only: train {X.shape}")
 
     if args.objective == "rps":
         if ref_t is None or ref_v is None:
             raise SystemExit("objective rps needs ref_p* columns in the export")
         booster, probs, onnx_out, train_s = train_rps(args, X, y, ref_t, Xv, ref_v, split)
-        if args.rows == "sighted":
-            # Serving leaves stops without a sighting at the reference.
-            probs[~sighted] = log_ref_probs(ref_v[~sighted])
+        if applied is not None:
+            # Serving leaves the other stops at the reference.
+            probs[~applied] = log_ref_probs(ref_v[~applied])
         onnx_model = as_multiclass(booster)
         best_iteration = booster.best_iteration
         gains = booster.feature_importance("gain", iteration=booster.best_iteration).tolist()
@@ -274,7 +287,8 @@ def main() -> None:
 
     slices = {}
     if gap_col is not None:
-        for name, mask in (("sighted", sighted), ("unsighted", ~sighted)):
+        for name, mask in (("sighted", sighted), ("unsighted", ~sighted),
+                           ("near unsighted", near & ~sighted), ("far", ~near)):
             if mask.any():
                 slices[name] = {
                     "n": int(mask.sum()),
@@ -305,7 +319,7 @@ def main() -> None:
     ref = metrics.get("reference", metrics["baseline"])
     print(f"valid RPS  lgbm={metrics['lgbm']['rps']:.5f}  baseline={metrics['baseline']['rps']:.5f}  reference={ref['rps']:.5f}")
     for name, sl in slices.items():
-        print(f"  {name:9s} n={sl['n']}  lgbm={sl['lgbm']:.5f}  reference={sl.get('reference', float('nan')):.5f}")
+        print(f"  {name:14s} n={sl['n']}  lgbm={sl['lgbm']:.5f}  reference={sl.get('reference', float('nan')):.5f}")
     print(f"valid LL   lgbm={metrics['lgbm']['logLoss']:.4f}  baseline={metrics['baseline']['logLoss']:.4f}  reference={ref['logLoss']:.4f}")
 
 
