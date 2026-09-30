@@ -19,6 +19,9 @@
  * baseline with the nowcast tables applied (tables rebuilt every few chunks from earlier data
  * only), so LightGBM stacks on what is served today. `ref_p*` records that distribution: the bar
  * a new model has to clear on the validation rows.
+ *
+ * Network state (network.ts) is taken as of the same sampled "now"; rows predicted far ahead get
+ * none, as serving gives none more than NETWORK_MAX_LEAD_MIN ahead.
  */
 import { createWriteStream } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -29,6 +32,7 @@ import { withTransaction } from '@gfm/db';
 import { blend, loadStats, DEFAULT_ALPHA } from './baseline.ts';
 import { FEATURE_NAMES, FEATURE_VERSION, buildFeatures, originStartToDate, type FeatureContext } from './features.ts';
 import type { StopQuery } from './groups.ts';
+import { NETWORK_WINDOW_MIN, NetworkIndex, loadNetworkEvents, networkStations } from './network.ts';
 import { MAX_GAP_MIN, MIN_GAP_MIN, applyNowcast, buildNowcastStats, loadNowcastStats, sightingsForRuns } from './nowcast.ts';
 import { aggregateInto, buildLabelledEvents, fullRunDataEnd } from './stats.ts';
 import { loadWeather, weatherFeatures } from './weather.ts';
@@ -94,6 +98,8 @@ export async function exportTrainingData(city: CityConfig, opts: ExportOptions):
     tz: city.tz,
   };
   const homePoint = city.weatherPoints[0]?.id ?? '';
+  const hubEvas = city.hubs.map((h) => h.eva);
+  const watched = networkStations(city);
   const header = ['label', ...FEATURE_NAMES, ...REF_COLUMNS].join(',') + '\n';
   const files = {
     train: path.join(opts.outDir, 'train.csv'),
@@ -138,6 +144,18 @@ export async function exportTrainingData(city: CityConfig, opts: ExportOptions):
       }
 
       const weather = await loadWeather(c, start, stop);
+      // Cutoffs reach up to MAX_GAP_MIN before the chunk's first stop, windows another hour back.
+      const network = new NetworkIndex(
+        await loadNetworkEvents(
+          [...new Set([...watched, ...hubEvas])],
+          new Date(start.getTime() - (MAX_GAP_MIN + NETWORK_WINDOW_MIN) * 60_000),
+          stop,
+          city.trainTypes,
+          c,
+        ),
+        new Set(hubEvas),
+        new Set(watched),
+      );
       const { rows } = await c.query<{
         trip_id: string; service_date: string; eva: string; train_type: string; train_number: string;
         event: 'a' | 'd'; pt: Date; bucket: number; stop_seq: number | null; origin_start: string;
@@ -158,10 +176,11 @@ export async function exportTrainingData(city: CityConfig, opts: ExportOptions):
         const stats = await loadStats(queries, city.tz, c, 'agg_chunk');
         const sampled = batch.flatMap((r, k) => {
           const cutoff = sampledCutoff(`${r.trip_id}|${r.eva}|${r.event}`, r.pt);
-          return cutoff ? [{ k, run: { tripId: r.trip_id, serviceDate: r.service_date, planned: r.pt, cutoff } }] : [];
+          return cutoff ? [{ k, cutoff, run: { tripId: r.trip_id, serviceDate: r.service_date, planned: r.pt, cutoff } }] : [];
         });
         const found = await sightingsForRuns(sampled.map((x) => x.run), c);
         const sightings = new Map(sampled.map((x, n) => [x.k, found[n] ?? null]));
+        const cutoffs = new Map(sampled.map((x) => [x.k, x.cutoff]));
         const nowcast = await loadNowcastStats(
           queries.flatMap((q, k) => (sightings.get(k) ? [{ q, sighting: sightings.get(k)! }] : [])),
           c,
@@ -181,6 +200,7 @@ export async function exportTrainingData(city: CityConfig, opts: ExportOptions):
               originStart: originStartToDate(r.origin_start, city.tz),
               sighting,
               weather: weatherFeatures(r.pt, weather, homePoint),
+              network: cutoffs.has(k) ? network.features(r.eva, r.pt, cutoffs.get(k)!) : undefined,
             },
             ctx,
           );

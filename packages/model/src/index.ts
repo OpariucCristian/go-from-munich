@@ -10,3 +10,4 @@ export * from './registry.ts';
 export * from './accuracy.ts';
 export * from './nowcast.ts';
 export * from './weather.ts';
+export * from './network.ts';

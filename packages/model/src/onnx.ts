@@ -12,6 +12,7 @@ import { getPool } from '@gfm/db';
 import { BaselinePredictor, type StopPrediction } from './baseline.ts';
 import { FEATURE_NAMES, buildFeatures, originStartToDate, type FeatureContext, type StopExtras } from './features.ts';
 import type { StopQuery } from './groups.ts';
+import { NETWORK_MAX_LEAD_MIN, loadNetworkIndex, networkCutoff, networkStations } from './network.ts';
 import { applyNowcast, loadNowcastStats, loadSightings } from './nowcast.ts';
 import { loadWeather, snapshotFeatures, weatherSnapshot } from './weather.ts';
 
@@ -33,8 +34,14 @@ export async function runOnnx(session: ort.InferenceSession, rows: number[][]): 
 
 export type Stacking = 'none' | 'logit-offset';
 
-/** Which stops the model corrects: all, or only those with a live sighting (the rest keep the reference). */
-export type AppliesTo = 'all' | 'sighted';
+/**
+ * Which stops the model corrects: all, only those with a live sighting, or those forecast at most
+ * NETWORK_MAX_LEAD_MIN ahead (network state known). The rest keep the reference.
+ */
+export type AppliesTo = 'all' | 'sighted' | 'near';
+
+/** Passed stops further back than this get no network state (keeps the event lookup small). */
+const NETWORK_LOOKBACK_MS = 6 * 3600_000;
 
 export interface OnnxOptions {
   stacking?: Stacking;
@@ -87,6 +94,9 @@ export class OnnxPredictor {
   readonly usesSightings = true;
   private readonly ctx: FeatureContext;
   private readonly homePoint: string;
+  private readonly hubEvas: string[];
+  private readonly watched: string[];
+  private readonly trainTypes: string[];
 
   constructor(
     readonly version: string,
@@ -97,6 +107,9 @@ export class OnnxPredictor {
   ) {
     this.ctx = { trainTypes: city.trainTypes, hubEvas: new Set(city.hubs.map((h) => h.eva)), tz: city.tz };
     this.homePoint = city.weatherPoints[0]?.id ?? '';
+    this.hubEvas = city.hubs.map((h) => h.eva);
+    this.watched = networkStations(city);
+    this.trainTypes = city.trainTypes;
   }
 
   static async load(
@@ -112,12 +125,20 @@ export class OnnxPredictor {
   async predict(queries: StopQuery[], now = new Date()): Promise<StopPrediction[]> {
     if (!queries.length) return [];
     const times = queries.map((q) => q.planned.getTime());
-    const [base, extras, sightings, weather] = await Promise.all([
+    // Network state as of now (or just before a passed stop), for stops within reach of it.
+    const cutoffs = queries.map((q) => {
+      const t = q.planned.getTime();
+      const near = t <= now.getTime() + NETWORK_MAX_LEAD_MIN * 60_000 && t > now.getTime() - NETWORK_LOOKBACK_MS;
+      return near ? networkCutoff(q.planned, now) : null;
+    });
+    const [base, extras, sightings, weather, network] = await Promise.all([
       this.baseline.predict(queries),
       loadExtras(queries, this.ctx.tz),
       loadSightings(queries, now, this.ctx.tz),
       loadWeather(getPool(), new Date(Math.min(...times)), new Date(Math.max(...times))),
+      loadNetworkIndex(cutoffs.filter((c) => c !== null), this.watched, this.hubEvas, this.trainTypes),
     ]);
+    const net = queries.map((q, i) => (cutoffs[i] ? network.features(q.eva, q.planned, cutoffs[i]!) : undefined));
     // As in the training export: sighted stops start from the baseline with the nowcast applied.
     const sighted = queries.flatMap((q, i) => (sightings[i] ? [{ q, sighting: sightings[i]! }] : []));
     const nowcast = sighted.length ? await loadNowcastStats(sighted) : new Map();
@@ -126,13 +147,15 @@ export class OnnxPredictor {
     );
     const withSighting = (b: StopPrediction, i: number) => (sightings[i] ? { ...b, sighting: sightings[i]! } : b);
     try {
-      const scored = queries.flatMap((_, i) => (this.opts.appliesTo !== 'sighted' || sightings[i] ? [i] : []));
+      const applies = (i: number) =>
+        this.opts.appliesTo === 'sighted' ? !!sightings[i] : this.opts.appliesTo === 'near' ? Number.isFinite(net[i]?.[0]) : true;
+      const scored = queries.flatMap((_, i) => (applies(i) ? [i] : []));
       const wx = new Map(scored.map((i) => [i, weatherSnapshot(queries[i]!.planned, weather, this.homePoint)]));
       const rows = scored.map((i) =>
         buildFeatures(
           queries[i]!,
           stacked[i]!,
-          { ...extras[i]!, sighting: sightings[i], weather: snapshotFeatures(wx.get(i)!) },
+          { ...extras[i]!, sighting: sightings[i], weather: snapshotFeatures(wx.get(i)!), network: net[i] },
           this.ctx,
         ),
       );

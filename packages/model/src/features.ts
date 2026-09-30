@@ -5,21 +5,26 @@
  *
  * The model is stacked on the baseline: its first inputs are the baseline's smoothed bucket
  * probabilities, and it learns corrections from calendar and route context, the latest live
- * sighting of the train (see nowcast.ts) and the weather (see weather.ts).
+ * sighting of the train (see nowcast.ts), the weather (see weather.ts) and how the trains around
+ * the stop have been running in the last hour (see network.ts).
  *
  * v3 added the sighting and weather columns; for sighted stops `base_p*` is the baseline with the
  * nowcast tables applied, so the model corrects what is served without it. Training rows get a sighting drawn the same way
  * serving finds one (the latest earlier stop before a sampled "now"), or none, so the model
  * learns both the far-ahead and the train-already-running case.
+ *
+ * v4 added how far ahead the forecast is made and the network state as of then; both are NaN for
+ * forecasts more than NETWORK_MAX_LEAD_MIN ahead.
  */
 import Holidays from 'date-holidays';
 import { NUM_BUCKETS, isoDate, toLocalParts, zonedToUtc } from '@gfm/core';
 import type { StopPrediction } from './baseline.ts';
 import type { StopQuery } from './groups.ts';
+import { NETWORK_FEATURE_NAMES } from './network.ts';
 import type { Sighting } from './nowcast.ts';
 import { WEATHER_FEATURE_NAMES } from './weather.ts';
 
-export const FEATURE_VERSION = 3;
+export const FEATURE_VERSION = 4;
 
 export const FEATURE_NAMES = [
   ...Array.from({ length: NUM_BUCKETS }, (_, i) => `base_p${i}`),
@@ -37,6 +42,7 @@ export const FEATURE_NAMES = [
   'seen_delay_min',
   'seen_gap_min',
   ...WEATHER_FEATURE_NAMES,
+  ...NETWORK_FEATURE_NAMES,
 ] as const;
 
 export interface FeatureContext {
@@ -53,6 +59,8 @@ export interface StopExtras {
   sighting?: Sighting | null;
   /** `weatherFeatures()` for the planned hour; NaNs when unknown. */
   weather?: number[];
+  /** `NetworkIndex.features()` as of the forecast's cutoff; NaNs when unknown. */
+  network?: number[];
 }
 
 const holidays = new Holidays('DE', 'BY');
@@ -102,5 +110,6 @@ export function buildFeatures(q: StopQuery, base: StopPrediction, extras: StopEx
     extras.sighting ? extras.sighting.delayMin : NaN,
     extras.sighting ? extras.sighting.gapMin : NaN,
     ...(extras.weather ?? WEATHER_FEATURE_NAMES.map(() => NaN)),
+    ...(extras.network ?? NETWORK_FEATURE_NAMES.map(() => NaN)),
   ];
 }
