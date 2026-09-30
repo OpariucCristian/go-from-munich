@@ -40,6 +40,8 @@ export interface OnnxOptions {
   stacking?: Stacking;
   refFloor?: number;
   appliesTo?: AppliesTo;
+  /** False when the model was trained with the weather columns blanked: its forecasts then say nothing about weather. */
+  usesWeather?: boolean;
 }
 
 /** softmax(log ref + raw), with the reference floored and renormalised exactly as in training. */
@@ -142,7 +144,8 @@ export class OnnxPredictor {
         if (!o) return withSighting(b, i);
         const distribution =
           this.opts.stacking === 'logit-offset' ? stackLogitOffset(b.distribution, o, this.opts.refFloor) : normalize(o);
-        return withSighting({ ...base[i]!, distribution, weather: wx.get(i)! }, i);
+        const weather = this.opts.usesWeather === false ? {} : { weather: wx.get(i)! };
+        return withSighting({ ...base[i]!, distribution, ...weather }, i);
       });
     } catch (err) {
       console.error('[onnx] scoring failed, using baseline + nowcast', err);
