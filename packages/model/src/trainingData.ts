@@ -15,9 +15,9 @@
  *
  * Live sightings: half the rows (by a stable hash) are "predicted far ahead" and get none; the
  * rest get a random "now" 5–240 min before the stop and the sighting `sightingsForRuns` finds at
- * that moment, exactly the lookup serving uses. For sighted rows the `base_p*` inputs are the
- * baseline with the nowcast tables applied (tables rebuilt every few chunks from earlier data
- * only), so LightGBM stacks on what is served today. `ref_p*` records that distribution: the bar
+ * that moment at a polled station, exactly the lookup serving uses. For sighted rows the `base_p*`
+ * inputs are the baseline with the nowcast tables applied (tables rebuilt every few chunks from
+ * earlier data only), so LightGBM stacks on what is served today. `ref_p*` records that distribution: the bar
  * a new model has to clear on the validation rows.
  *
  * Network state (network.ts) is taken as of the same sampled "now"; rows predicted far ahead get
@@ -27,7 +27,7 @@ import { createWriteStream } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { once } from 'node:events';
-import { NUM_BUCKETS, type CityConfig } from '@gfm/core';
+import { NUM_BUCKETS, polledStations, type CityConfig } from '@gfm/core';
 import { withTransaction } from '@gfm/db';
 import { blend, loadStats, DEFAULT_ALPHA } from './baseline.ts';
 import { FEATURE_NAMES, FEATURE_VERSION, buildFeatures, originStartToDate, type FeatureContext } from './features.ts';
@@ -98,6 +98,8 @@ export async function exportTrainingData(city: CityConfig, opts: ExportOptions):
     tz: city.tz,
   };
   const homePoint = city.weatherPoints[0]?.id ?? '';
+  // History has every stop of a run, live data only the polled stations: sample sightings as serving sees them.
+  const sightingStations = polledStations(city).map((s) => s.eva);
   const hubEvas = city.hubs.map((h) => h.eva);
   const watched = networkStations(city);
   const header = ['label', ...FEATURE_NAMES, ...REF_COLUMNS].join(',') + '\n';
@@ -178,7 +180,7 @@ export async function exportTrainingData(city: CityConfig, opts: ExportOptions):
           const cutoff = sampledCutoff(`${r.trip_id}|${r.eva}|${r.event}`, r.pt);
           return cutoff ? [{ k, cutoff, run: { tripId: r.trip_id, serviceDate: r.service_date, planned: r.pt, cutoff } }] : [];
         });
-        const found = await sightingsForRuns(sampled.map((x) => x.run), c);
+        const found = await sightingsForRuns(sampled.map((x) => x.run), c, sightingStations);
         const sightings = new Map(sampled.map((x, n) => [x.k, found[n] ?? null]));
         const cutoffs = new Map(sampled.map((x) => [x.k, x.cutoff]));
         const nowcast = await loadNowcastStats(

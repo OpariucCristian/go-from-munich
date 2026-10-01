@@ -10,9 +10,13 @@
  * `prev = '*'` rows hold the same counts summed over every earlier delay (the marginal).
  *
  * A "sighting" is the latest stop of the run, planned 5–240 min before the target and no later
- * than the cutoff (now, when serving), with a known delay. The same SQL finds sightings for live
+ * than the cutoff (now, when serving), with a known delay, at a station we poll live. The same SQL
+ * finds sightings for live
  * serving and for historical rows with a chosen cutoff (backtests, and the training export for
  * LightGBM), so a model trained on historical sightings sees exactly what serving will give it.
+ * The station filter matters for that: history covers every stop of a run, live data only the
+ * polled stations, and "not seen yet" must mean the same in both (else a long-distance train
+ * before its first polled stop looks disrupted to the model).
  */
 import { bucketOf, normalize, NUM_BUCKETS, type Distribution } from '@gfm/core';
 import { getPool, withTransaction } from '@gfm/db';
@@ -229,7 +233,8 @@ export async function refreshNowcastStats(opts: NowcastStatsOptions = {}) {
  * A passed live stop with no reported change counts as on time when the poller was watching the
  * station then, the same rule the nightly finalisation applies.
  */
-const sightingLateral = (r: string) => `
+/** `stations` is the SQL text[] parameter of the stations a sighting may come from (NULL: any). */
+const sightingLateral = (r: string, stations: string) => `
   CROSS JOIN LATERAL (
     SELECT s.eva, st.name, s.pt, s.delay FROM (
       SELECT e.eva, x.pt, x.cancelled,
@@ -243,6 +248,7 @@ const sightingLateral = (r: string) => `
       WHERE e.trip_id = ${r}.trip_id AND e.service_date = ${r}.service_date
         AND x.pt <= LEAST(${r}.cutoff, ${r}.planned - make_interval(mins => ${MIN_GAP_MIN}))
         AND x.pt >= ${r}.planned - make_interval(mins => ${MAX_GAP_MIN})
+        AND (${stations}::text[] IS NULL OR e.eva = ANY(${stations}::text[]))
     ) s
     LEFT JOIN stations st ON st.eva = s.eva
     WHERE s.delay IS NOT NULL AND NOT s.cancelled
@@ -263,19 +269,21 @@ function toSighting(r: SightingRow, planned: Date): Sighting {
 
 /**
  * Sightings for known runs as of a cutoff each: live serving passes now; backtests and the
- * training export pass a historical instant, so both see the same kind of input.
+ * training export pass a historical instant, so both see the same kind of input. Pass the polled
+ * stations (`polledStations`) as `stations` wherever history is read, so it matches live data.
  */
 export async function sightingsForRuns(
   runs: { tripId: string; serviceDate: string; planned: Date; cutoff: Date }[],
   db: Db = getPool(),
+  stations: string[] | null = null,
 ): Promise<(Sighting | null)[]> {
   if (!runs.length) return [];
   const { rows } = await db.query<SightingRow>(
     `SELECT r.i, s.eva, s.name, s.pt, s.delay
      FROM unnest($1::bigint[], $2::date[], $3::timestamptz[], $4::timestamptz[]) WITH ORDINALITY
           AS r(trip_id, service_date, planned, cutoff, i)
-     ${sightingLateral('r')}`,
-    [runs.map((r) => r.tripId), runs.map((r) => r.serviceDate), runs.map((r) => r.planned), runs.map((r) => r.cutoff)],
+     ${sightingLateral('r', '$5')}`,
+    [runs.map((r) => r.tripId), runs.map((r) => r.serviceDate), runs.map((r) => r.planned), runs.map((r) => r.cutoff), stations],
   );
   const byIdx = new Map(rows.map((r) => [Number(r.i) - 1, r]));
   return runs.map((run, i) => {
@@ -290,6 +298,7 @@ export async function loadSightings(
   now = new Date(),
   tz = 'Europe/Berlin',
   db: Db = getPool(),
+  stations: string[] | null = null,
 ): Promise<(Sighting | null)[]> {
   // Only stops close enough that the train may already be running are worth a lookup.
   const idx = queries.flatMap((q, i) =>
@@ -312,7 +321,7 @@ export async function loadSightings(
         AND CASE q.event WHEN 'a' THEN e.planned_arr ELSE e.planned_dep END = q.planned
        ORDER BY q.i, (e.source = 'live') DESC
      )
-     SELECT r.i, s.eva, s.name, s.pt, s.delay FROM r ${sightingLateral('r')}`,
+     SELECT r.i, s.eva, s.name, s.pt, s.delay FROM r ${sightingLateral('r', '$8')}`,
     [
       sel.map((q) => q.trainType),
       sel.map((q) => q.trainNumber),
@@ -321,6 +330,7 @@ export async function loadSightings(
       sel.map((q) => q.planned),
       now,
       tz,
+      stations,
     ],
   );
   for (const r of rows) {

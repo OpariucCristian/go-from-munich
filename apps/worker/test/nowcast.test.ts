@@ -75,6 +75,16 @@ describe.skipIf(!url)('nowcast', () => {
     expect(none).toBeNull();
   });
 
+  it('only takes sightings from the given stations', async () => {
+    const { rows } = await pool.query<{ id: string }>(`SELECT id::text FROM trips WHERE train_number = '1'`);
+    const run = { tripId: rows[0]!.id, serviceDate: DAY, planned: at('11:00'), cutoff: at('10:45') };
+    // B (Pasing) is the latest stop, but only A (Augsburg) counts; with neither, the train is unseen.
+    const [onlyA] = await model.sightingsForRuns([run], pool, ['8000013']);
+    const [neither] = await model.sightingsForRuns([run], pool, ['8000096']);
+    expect(onlyA).toMatchObject({ eva: '8000013', gapMin: 60 });
+    expect(neither).toBeNull();
+  });
+
   it('resolves the run of a queried stop and applies the tables when serving', async () => {
     const layer = new model.NowcastLayer(
       { kind: 'test', version: 'v', predict: async (qs) => qs.map(() => ({ distribution: [0.9, 0.05, 0.02, 0.01, 0.01, 0.005, 0.003, 0.002], supportLevel: 6 as const, supportN: 0 })) },
