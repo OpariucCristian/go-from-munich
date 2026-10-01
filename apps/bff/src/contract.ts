@@ -148,6 +148,8 @@ export interface ConnectionsView {
 }
 
 export interface DepartureRow {
+  /** The station this train leaves from, for links to its estimate (can be part of the board's station, e.g. Hbf Gl.27-36). */
+  eva: string;
   time: string;
   train: string;
   trainType: string;

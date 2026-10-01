@@ -349,6 +349,7 @@ describe('featured view', () => {
 
 describe('splash view', () => {
   const dep = (train: string, planned: string, p: CorePrediction) => ({
+    eva: '8098261',
     train,
     trainType: train.split(' ')[0]!,
     trainNumber: train.split(' ')[1]!,
@@ -370,7 +371,7 @@ describe('splash view', () => {
     );
     expect(v.window).toBe('19:49–20:49');
     expect(v.count).toBe(3);
-    expect(v.next.map((r) => r.train)).toEqual(['ICE 1', 'RE 2']);
+    expect(v.next.map((r) => [r.train, r.eva])).toEqual([['ICE 1', '8098261'], ['RE 2', '8098261']]);
     expect(v.bars.reduce((a, b) => a + b.p, 0)).toBeCloseTo(1, 3);
     // Running share: (0.04+0.02+0.01+0.01 + 2 × (0.2+0.15+0.15+0.07)) / (0.98 + 2 × 0.92)
     expect(v.lateOver5).toBeCloseTo((0.08 + 2 * 0.57) / (0.98 + 1.84), 3);

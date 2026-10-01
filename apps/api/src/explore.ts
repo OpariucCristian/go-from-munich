@@ -165,6 +165,8 @@ export function registerExploreRoutes(app: FastifyInstance, city: CityConfig, pr
         station: { eva, name: names.rows[0]?.name ?? eva },
         at: at.toISOString(),
         departures: rows.map((r, i) => ({
+          // The board can span several EVAs (e.g. Hbf and its Gl.27-36 part); this is the train's own.
+          eva: r.eva,
           train: `${r.train_type} ${r.train_number}`,
           trainType: r.train_type,
           trainNumber: r.train_number,

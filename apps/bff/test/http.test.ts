@@ -22,7 +22,7 @@ vi.stubGlobal('fetch', async (url: URL) => {
       at: '2026-09-28T20:40:00Z',
       departures: [
         {
-          train: 'ICE 1080', trainType: 'ICE', trainNumber: '1080', line: null, destination: 'Hamburg Hbf',
+          eva: '8098261', train: 'ICE 1080', trainType: 'ICE', trainNumber: '1080', line: null, destination: 'Hamburg Hbf',
           planned: '2026-09-28T20:52:00Z', live: { delayMin: 4, cancelled: false, observedAt: null }, prediction,
         },
       ],
@@ -45,6 +45,7 @@ describe('BFF over HTTP', () => {
     expect(res.statusCode).toBe(200);
     expect(coreCalls.at(-1)).toBe('/departures/8000261?group=long&minutes=60');
     expect(res.json().rows[0]).toMatchObject({
+      eva: '8098261', // the train's own station, not the board's: estimate links depend on it
       time: '22:52',
       train: 'ICE 1080',
       destination: 'Hamburg Hbf',

@@ -114,7 +114,7 @@ function TryChips({ next }: { next: DepartureRow[] }) {
       label: pick.train,
       to: estimateHref({ mode: 'train', train: pick.train, date: pick.date, [pick.event === 'dep' ? 'tf' : 'tt']: pick.eva, featured: '1' }),
     },
-    long && { label: long.train, to: estimateHref({ mode: 'train', train: long.train, date: berlinDateOf(long.planned), tf: HBF.eva }) },
+    long && { label: long.train, to: estimateHref({ mode: 'train', train: long.train, date: berlinDateOf(long.planned), tf: long.eva }) },
     { label: 'Pasing → Hbf', to: routeHref(PASING, HBF) },
     { label: 'Shared trip', to: estimateHref({ mode: 'share' }) },
   ].filter((c): c is { label: string; to: string } => !!c);
@@ -163,7 +163,7 @@ function Departures({ s }: { s: SplashView }) {
       </div>
       <div className="splash-dep-list" role="list" aria-label={`Next departures, ${s.station.name}`}>
         {s.next.map((r) => (
-          <DepartureLine key={`${r.train}-${r.planned}`} row={r} station={s.station.eva} />
+          <DepartureLine key={`${r.train}-${r.planned}`} row={r} />
         ))}
       </div>
       <div className="splash-legend" aria-hidden>
@@ -179,14 +179,14 @@ function Departures({ s }: { s: SplashView }) {
   );
 }
 
-function DepartureLine({ row: r, station }: { row: DepartureRow; station: string }) {
+function DepartureLine({ row: r }: { row: DepartureRow }) {
   const [onTime, mid, late] = r.split;
   const cancelled = !!r.live?.cancelled;
   return (
     <Link
       role="listitem"
       className="splash-dep"
-      to={estimateHref({ mode: 'train', train: r.train, date: berlinDateOf(r.planned), tf: station })}
+      to={estimateHref({ mode: 'train', train: r.train, date: berlinDateOf(r.planned), tf: r.eva })}
     >
       <span className="splash-dep-time">{r.time}</span>
       <span className="splash-dep-tag">
