@@ -7,7 +7,7 @@
  * of the served-without-LightGBM distribution (baseline + nowcast).
  */
 import * as ort from 'onnxruntime-node';
-import { NUM_BUCKETS, normalize, type CityConfig } from '@gfm/core';
+import { NUM_BUCKETS, normalize, polledStations, type CityConfig } from '@gfm/core';
 import { getPool } from '@gfm/db';
 import { BaselinePredictor, type StopPrediction } from './baseline.ts';
 import { FEATURE_NAMES, buildFeatures, originStartToDate, type FeatureContext, type StopExtras } from './features.ts';
@@ -98,6 +98,7 @@ export class OnnxPredictor {
   private readonly homePoint: string;
   private readonly hubEvas: string[];
   private readonly watched: string[];
+  private readonly polled: string[];
   private readonly trainTypes: string[];
 
   constructor(
@@ -111,6 +112,7 @@ export class OnnxPredictor {
     this.homePoint = city.weatherPoints[0]?.id ?? '';
     this.hubEvas = city.hubs.map((h) => h.eva);
     this.watched = networkStations(city);
+    this.polled = polledStations(city).map((s) => s.eva);
     this.trainTypes = city.trainTypes;
   }
 
@@ -136,7 +138,7 @@ export class OnnxPredictor {
     const [base, extras, sightings, weather, network] = await Promise.all([
       this.baseline.predict(queries),
       loadExtras(queries, this.ctx.tz),
-      loadSightings(queries, now, this.ctx.tz),
+      loadSightings(queries, now, this.ctx.tz, getPool(), this.polled),
       loadWeather(getPool(), new Date(Math.min(...times)), new Date(Math.max(...times))),
       loadNetworkIndex(cutoffs.filter((c) => c !== null), this.watched, this.hubEvas, this.trainTypes),
     ]);
