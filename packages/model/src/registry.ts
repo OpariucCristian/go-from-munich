@@ -40,7 +40,9 @@ export interface TrainMetrics {
  */
 export async function registerAndMaybePromote(modelDir: string, version: string, minGain = 0.002) {
   const metrics = JSON.parse(await readFile(path.join(modelDir, 'metrics.json'), 'utf8')) as TrainMetrics;
-  const valid = metrics.chunks.find((c) => c.split === 'valid');
+  // Chunk ends are exclusive midnights; train_to is the last day trained on, like train_from inclusive.
+  const lastEnd = metrics.chunks.reduce<string | null>((m, c) => (m === null || c.end > m ? c.end : m), null);
+  const trainTo = lastEnd ? new Date(Date.parse(lastEnd) - 86400_000).toISOString().slice(0, 10) : null;
   return withTransaction(async (c) => {
     const active = await c.query<{ id: number; kind: string; metrics: TrainMetrics | null }>(
       'SELECT id, kind, metrics FROM models WHERE is_active',
@@ -60,7 +62,7 @@ export async function registerAndMaybePromote(modelDir: string, version: string,
       [
         version,
         metrics.chunks[0]?.start ?? null,
-        valid?.end ?? null,
+        trainTo,
         metrics,
         path.resolve(modelDir, 'model.onnx'),
         promote,
