@@ -1,4 +1,4 @@
-import { NavLink, Outlet, Route, Routes, useSearchParams } from 'react-router';
+import { NavLink, Outlet, Route, Routes, useLocation, useSearchParams } from 'react-router';
 import { useMeta } from './api.ts';
 import { AccuracyPage } from './pages/AccuracyPage.tsx';
 import { DeparturesPage } from './pages/DeparturesPage.tsx';
@@ -18,9 +18,12 @@ const NAV: { to: string; label: string; short?: string; end: boolean }[] = [
 
 function Shell() {
   const meta = useMeta().data;
+  const { pathname, search } = useLocation();
+  // The start screen centres its content on wide screens, and the header lines up with it.
+  const splash = pathname === '/' && !search;
   const status = meta ? [`Model ${meta.model}`, meta.dataThrough, meta.liveLabel].filter(Boolean).join(' · ') : '';
   return (
-    <div className="shell">
+    <div className={splash ? 'shell shell-splash' : 'shell'}>
       <header className="topbar">
         <div className="topbar-left">
           <NavLink to="/" className="brand" aria-label="Spät home">

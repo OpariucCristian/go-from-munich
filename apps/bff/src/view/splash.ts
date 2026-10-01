@@ -5,7 +5,7 @@ import { departuresView } from './explore.ts';
 import { distributionOf, pct, timeOf } from './format.ts';
 
 const r4 = (x: number) => Math.round(x * 10000) / 10000;
-const NEXT_ROWS = 5;
+const NEXT_ROWS = 10;
 const WINDOW_MIN = 60;
 
 /** `boards[0]` is the main station, whose next departures are listed. */
