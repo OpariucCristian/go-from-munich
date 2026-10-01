@@ -71,6 +71,8 @@ async function loadExtras(queries: StopQuery[], tz: string): Promise<StopExtras[
      JOIN trips t ON t.train_type = q.train_type AND t.train_number = q.train_number
                  AND t.service_date >= current_date - 90
      JOIN stop_events e ON e.trip_id = t.id AND e.service_date = t.service_date AND e.eva = q.eva
+     -- Live change-only rows (a delay seen before the plan) have no planned time to project from.
+                      AND COALESCE(e.planned_dep, e.planned_arr) IS NOT NULL
      ORDER BY q.i, t.service_date DESC`,
     [queries.map((q) => q.eva), queries.map((q) => q.trainType), queries.map((q) => q.trainNumber)],
   );
