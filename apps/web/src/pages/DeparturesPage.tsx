@@ -58,14 +58,14 @@ export function DeparturesPage() {
             No departures in the next 90 minutes. The live poller may not be running.
           </div>
         )}
-        {board.data?.rows.map((r) => <BoardRow key={`${r.train}-${r.planned}`} row={r} station={station} />)}
+        {board.data?.rows.map((r) => <BoardRow key={`${r.train}-${r.planned}`} row={r} />)}
       </div>
     </section>
   );
 }
 
-function BoardRow({ row: r, station }: { row: DepartureRow; station: string }) {
-  const href = `/?${new URLSearchParams({ mode: 'train', train: r.train, date: berlinDateOf(r.planned), tf: station })}`;
+function BoardRow({ row: r }: { row: DepartureRow }) {
+  const href = `/?${new URLSearchParams({ mode: 'train', train: r.train, date: berlinDateOf(r.planned), tf: r.eva })}`;
   const [onTime, mid, late] = r.split;
   return (
     <Link className="board-row" role="row" to={href}>

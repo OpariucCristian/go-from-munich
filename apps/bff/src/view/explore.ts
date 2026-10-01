@@ -13,6 +13,7 @@ export function departuresView(core: CoreDepartures): DeparturesView {
       const b = d.prediction.buckets.map((x) => x.p);
       const dist = distributionOf(d.prediction);
       return {
+        eva: d.eva,
         time: timeOf(d.planned),
         train: d.train,
         trainType: d.trainType,

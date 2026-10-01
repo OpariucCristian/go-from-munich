@@ -120,6 +120,8 @@ export interface CoreDepartures {
   station: { eva: string; name: string };
   at: string;
   departures: {
+    /** Where this train leaves from; can differ from `station` (e.g. München Hbf Gl.27-36). */
+    eva: string;
     train: string;
     trainType: string;
     trainNumber: string;
