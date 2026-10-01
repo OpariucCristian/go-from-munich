@@ -122,6 +122,8 @@ export interface CoreDepartures {
   departures: {
     /** Where this train leaves from; can differ from `station` (e.g. München Hbf Gl.27-36). */
     eva: string;
+    /** False when no recorded run stops anywhere else: no route to forecast. */
+    routeKnown: boolean;
     train: string;
     trainType: string;
     trainNumber: string;

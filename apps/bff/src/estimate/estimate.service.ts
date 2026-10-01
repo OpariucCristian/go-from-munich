@@ -43,6 +43,10 @@ export function timelineQueries(
   const fromIdx = from ? stops.findIndex((s) => s.eva === from && s.planned_dep) : stops.findIndex((s) => s.planned_dep);
   const lastArr = stops.findLastIndex((s) => s.planned_arr);
   const toIdx = to ? stops.findIndex((s, i) => i > fromIdx && s.eva === to && s.planned_arr) : lastArr;
+  if (fromIdx >= 0 && !to && !stops.slice(fromIdx + 1).some((s) => s.planned_arr)) {
+    const at = stops[fromIdx]!.name ?? 'this station';
+    throw new BadRequestException(`We only know ${type} ${number} at ${at} so far, so there are no later stops to forecast yet`);
+  }
   if (fromIdx < 0 || toIdx < 0 || toIdx <= fromIdx) {
     throw new BadRequestException(`${type} ${number} does not run from that station to that station`);
   }

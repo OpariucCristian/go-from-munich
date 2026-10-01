@@ -14,6 +14,7 @@ export function departuresView(core: CoreDepartures): DeparturesView {
       const dist = distributionOf(d.prediction);
       return {
         eva: d.eva,
+        linkable: d.routeKnown !== false,
         time: timeOf(d.planned),
         train: d.train,
         trainType: d.trainType,

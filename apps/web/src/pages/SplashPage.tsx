@@ -108,7 +108,7 @@ function Search() {
 /** Ready-made searches: the train we expect to be latest, the next long-distance train, a common route. */
 function TryChips({ next }: { next: DepartureRow[] }) {
   const pick = useFeatured(true).data?.featured;
-  const long = next.find((r) => ['ICE', 'IC', 'EC', 'ECE', 'RJ', 'RJX'].includes(r.trainType) && r.train !== pick?.train);
+  const long = next.find((r) => r.linkable && ['ICE', 'IC', 'EC', 'ECE', 'RJ', 'RJX'].includes(r.trainType) && r.train !== pick?.train);
   const chips = [
     pick && {
       label: pick.train,
@@ -182,12 +182,8 @@ function Departures({ s }: { s: SplashView }) {
 function DepartureLine({ row: r }: { row: DepartureRow }) {
   const [onTime, mid, late] = r.split;
   const cancelled = !!r.live?.cancelled;
-  return (
-    <Link
-      role="listitem"
-      className="splash-dep"
-      to={estimateHref({ mode: 'train', train: r.train, date: berlinDateOf(r.planned), tf: r.eva })}
-    >
+  const body = (
+    <>
       <span className="splash-dep-time">{r.time}</span>
       <span className="splash-dep-tag">
         <span className="train-tag">{r.train}</span>
@@ -205,6 +201,18 @@ function DepartureLine({ row: r }: { row: DepartureRow }) {
         <span style={{ width: pct(late), background: 'var(--bad)' }} />
       </span>
       <span className={`splash-dep-exp ${cancelled ? 'tone-bad' : toneClass(r.tone)}`}>{cancelled ? '✕' : r.typicalLabel}</span>
+    </>
+  );
+  if (!r.linkable) {
+    return (
+      <div role="listitem" className="splash-dep splash-dep-static" title="We only know this train at this station so far, so there is no route to forecast yet">
+        {body}
+      </div>
+    );
+  }
+  return (
+    <Link role="listitem" className="splash-dep" to={estimateHref({ mode: 'train', train: r.train, date: berlinDateOf(r.planned), tf: r.eva })}>
+      {body}
     </Link>
   );
 }
