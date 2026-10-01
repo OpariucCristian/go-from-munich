@@ -12,7 +12,7 @@ const DAY_MS = 86400_000;
 const signedPct = (x: number) => `${x >= 0 ? '+' : '−'}${Math.abs(Math.round(x * 100))}%`;
 const fmt = (metric: TrendMetric, v: number) => (metric === 'skill' ? signedPct(v) : pct(v));
 
-function useWidth<T extends HTMLElement>() {
+export function useWidth<T extends HTMLElement>() {
   const ref = useRef<T>(null);
   const [width, setWidth] = useState(0);
   useLayoutEffect(() => {
