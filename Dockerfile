@@ -14,6 +14,8 @@ COPY apps/bff/package.json apps/bff/
 COPY apps/web/package.json apps/web/
 RUN npm ci --include-workspace-root
 COPY apps/bff/src/contract.ts apps/bff/src/
+# Pure bucket maths that the "How it works" page runs in the browser.
+COPY packages/core/src/buckets.ts packages/core/src/
 COPY apps/web ./apps/web
 RUN npx vite build --config apps/web/vite.config.ts
 

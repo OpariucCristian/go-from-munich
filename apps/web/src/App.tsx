@@ -3,14 +3,16 @@ import { useMeta } from './api.ts';
 import { AccuracyPage } from './pages/AccuracyPage.tsx';
 import { DeparturesPage } from './pages/DeparturesPage.tsx';
 import { EstimatePage } from './pages/EstimatePage.tsx';
+import { HowItWorksPage } from './pages/HowItWorksPage.tsx';
 import { PatternsPage } from './pages/PatternsPage.tsx';
 import { SharePage } from './pages/SharePage.tsx';
 
-const NAV = [
+const NAV: { to: string; label: string; short?: string; end: boolean }[] = [
   { to: '/', label: 'Estimate', end: true },
   { to: '/departures', label: 'Departures', end: false },
   { to: '/patterns', label: 'Patterns', end: false },
   { to: '/accuracy', label: 'Accuracy', end: false },
+  { to: '/how-it-works', label: 'How it works', short: 'How', end: false },
 ];
 
 function Shell() {
@@ -41,7 +43,7 @@ function Shell() {
       <nav className="tabbar" aria-label="Main">
         {NAV.map((n) => (
           <NavLink key={n.to} to={n.to} end={n.end}>
-            {n.label}
+            {n.short ?? n.label}
           </NavLink>
         ))}
       </nav>
@@ -58,6 +60,7 @@ export function App() {
         <Route path="departures" element={<DeparturesPage />} />
         <Route path="patterns" element={<PatternsPage />} />
         <Route path="accuracy" element={<AccuracyPage />} />
+        <Route path="how-it-works" element={<HowItWorksPage />} />
         <Route path="*" element={<EstimatePage />} />
       </Route>
     </Routes>
