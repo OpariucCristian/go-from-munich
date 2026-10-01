@@ -89,7 +89,13 @@ export function metaView(core: CoreMeta): MetaView {
     city: core.city.name,
     hubs: core.hubs,
     model: `${core.model.kind} ${core.model.version.replace(/^(baseline|lgbm)-/, '')}`,
-    dataThrough: core.dataThrough ? `data to ${shortDateOf(core.dataThrough)}` : null,
+    dataThrough:
+      [
+        core.trainedThrough && `trained to ${shortDateOf(core.trainedThrough)}`,
+        core.statsThrough && `stats to ${shortDateOf(core.statsThrough)}`,
+      ]
+        .filter(Boolean)
+        .join(' · ') || null,
     liveLabel: core.liveObservedAt ? `live ${timeOf(core.liveObservedAt)}` : null,
     attribution: core.attribution,
   };

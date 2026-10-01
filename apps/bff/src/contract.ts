@@ -188,7 +188,7 @@ export interface MetaView {
   city: string;
   hubs: { eva: string; name: string }[];
   model: string;
-  dataThrough: string | null; // 'data to 31 Aug'
+  dataThrough: string | null; // 'trained to 31 Aug · stats to 30 Sep'
   liveLabel: string | null; // 'live 22:43'
   attribution: string;
 }

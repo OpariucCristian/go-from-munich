@@ -108,7 +108,10 @@ export interface CoreMeta {
   city: { id: string; name: string; tz: string };
   hubs: { eva: string; name: string }[];
   model: { kind: string; version: string };
-  dataThrough: string | null;
+  /** Last day the served LightGBM model trained on (null for the baseline). */
+  trainedThrough: string | null;
+  /** Last day in the nightly delay statistics, poller days included. */
+  statsThrough: string | null;
   liveObservedAt: string | null;
   attribution: string;
 }

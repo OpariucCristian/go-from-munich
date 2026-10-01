@@ -45,16 +45,24 @@ const evaSchema = { type: 'string', pattern: '^0?[0-9]{7}$' } as const;
 
 export function registerExploreRoutes(app: FastifyInstance, city: CityConfig, predictor: () => Predictor) {
   app.get('/meta', async () => {
-    const { rows } = await getPool().query<{ data_through: string | null; live_at: Date | null }>(
-      `SELECT (SELECT max(service_date)::text FROM stop_events WHERE source = 'piebro') AS data_through,
-              (SELECT max(last_observed_at) FROM stop_events WHERE source = 'live') AS live_at`,
-    );
     const p = predictor();
+    // Two horizons: the served model's last training day (its chunk ends are exclusive), and the
+    // day before the last nightly run that refreshed the stats, which include the poller's days.
+    const { rows } = await getPool().query<{ trained_through: string | null; stats_through: string | null; live_at: Date | null }>(
+      `SELECT (SELECT ((max((c->>'end')::timestamptz) AT TIME ZONE 'UTC')::date - 1)::text
+               FROM models m CROSS JOIN LATERAL jsonb_array_elements(m.metrics->'chunks') c
+               WHERE m.kind = 'lgbm' AND m.version = $1) AS trained_through,
+              (SELECT ((max(started_at) AT TIME ZONE $3)::date - 1)::text
+               FROM job_runs WHERE job = 'nightly' AND city_id = $2 AND stats ? 'stats') AS stats_through,
+              (SELECT max(last_observed_at) FROM stop_events WHERE source = 'live') AS live_at`,
+      [p.version, city.id, city.tz],
+    );
     return {
       city: { id: city.id, name: city.name, tz: city.tz },
       hubs: city.hubs.filter((h) => !/Gl\./.test(h.name)),
       model: { kind: p.kind, version: p.version },
-      dataThrough: rows[0]?.data_through ?? null,
+      trainedThrough: p.kind === 'lgbm' ? (rows[0]?.trained_through ?? null) : null,
+      statsThrough: rows[0]?.stats_through ?? null,
       liveObservedAt: rows[0]?.live_at?.toISOString() ?? null,
       attribution: ATTRIBUTION,
     };
