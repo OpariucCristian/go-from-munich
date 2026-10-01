@@ -149,7 +149,7 @@ export function registerExploreRoutes(app: FastifyInstance, city: CityConfig, pr
                   SELECT 1 FROM trips t2
                   JOIN stop_events e2 ON e2.service_date = t2.service_date AND e2.trip_id = t2.id
                   WHERE t2.train_type = t.train_type AND t2.train_number = t.train_number
-                    AND t2.service_date BETWEEN $2::date - 90 AND $2::date + 1
+                    AND t2.service_date BETWEEN ($2::timestamptz)::date - 90 AND ($2::timestamptz)::date + 1
                     AND e2.eva <> e.eva AND e2.planned_arr IS NOT NULL
                 ) AS route_known
          FROM stop_events e JOIN trips t ON t.id = e.trip_id
