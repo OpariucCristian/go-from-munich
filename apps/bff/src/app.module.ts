@@ -4,6 +4,7 @@ import { EstimateController } from './estimate/estimate.controller.ts';
 import { EstimateService } from './estimate/estimate.service.ts';
 import { ExploreController } from './explore/explore.controller.ts';
 import { MetaService } from './explore/meta.service.ts';
+import { SplashService } from './explore/splash.service.ts';
 
 @Controller('bff')
 class HealthController {
@@ -20,6 +21,7 @@ class HealthController {
     { provide: FETCH, useValue: (...args: Parameters<typeof fetch>) => fetch(...args) },
     CoreApi,
     MetaService,
+    SplashService,
     EstimateService,
   ],
 })

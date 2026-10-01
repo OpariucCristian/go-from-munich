@@ -1,4 +1,4 @@
-import { NavLink, Outlet, Route, Routes } from 'react-router';
+import { NavLink, Outlet, Route, Routes, useSearchParams } from 'react-router';
 import { useMeta } from './api.ts';
 import { AccuracyPage } from './pages/AccuracyPage.tsx';
 import { DeparturesPage } from './pages/DeparturesPage.tsx';
@@ -6,6 +6,7 @@ import { EstimatePage } from './pages/EstimatePage.tsx';
 import { HowItWorksPage } from './pages/HowItWorksPage.tsx';
 import { PatternsPage } from './pages/PatternsPage.tsx';
 import { SharePage } from './pages/SharePage.tsx';
+import { SplashPage } from './pages/SplashPage.tsx';
 
 const NAV: { to: string; label: string; short?: string; end: boolean }[] = [
   { to: '/', label: 'Estimate', end: true },
@@ -51,17 +52,23 @@ function Shell() {
   );
 }
 
+/** '/' with nothing to look up opens the start screen; any search state opens the estimate. */
+function Home() {
+  const [params] = useSearchParams();
+  return params.size === 0 ? <SplashPage /> : <EstimatePage />;
+}
+
 export function App() {
   return (
     <Routes>
       <Route element={<Shell />}>
-        <Route index element={<EstimatePage />} />
+        <Route index element={<Home />} />
         <Route path="share" element={<SharePage />} />
         <Route path="departures" element={<DeparturesPage />} />
         <Route path="patterns" element={<PatternsPage />} />
         <Route path="accuracy" element={<AccuracyPage />} />
         <Route path="how-it-works" element={<HowItWorksPage />} />
-        <Route path="*" element={<EstimatePage />} />
+        <Route path="*" element={<Home />} />
       </Route>
     </Routes>
   );

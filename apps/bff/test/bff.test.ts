@@ -7,6 +7,7 @@ import { MetaService } from '../src/explore/meta.service.ts';
 import { featuredView, headlineOf, heroOf, tripEstimate } from '../src/view/estimate.ts';
 import { accuracyRunsView, accuracyRunView, accuracyView } from '../src/view/accuracy.ts';
 import { patternsView } from '../src/view/explore.ts';
+import { splashView } from '../src/view/splash.ts';
 import { confidenceOf, dateLabelOf, distributionOf, durationLabel, timeOf, toneOf } from '../src/view/format.ts';
 
 /** A core prediction from 8 bucket probabilities (≤2, 3–5, 6–10, 11–15, 16–30, 31–60, >60, cancelled). */
@@ -343,5 +344,37 @@ describe('featured view', () => {
       reason: 'Biggest delay we expect for trains leaving the Munich hubs in the next 3 hours: +12 min on average if it runs, 58% chance of more than 5 minutes late.',
     });
     expect(featuredView({ featured: null })).toBeNull();
+  });
+});
+
+describe('splash view', () => {
+  const dep = (train: string, planned: string, p: CorePrediction) => ({
+    train,
+    trainType: train.split(' ')[0]!,
+    trainNumber: train.split(' ')[1]!,
+    line: null,
+    destination: 'Salzburg Hbf',
+    planned,
+    live: null,
+    prediction: p,
+  });
+  const board = (eva: string, deps: ReturnType<typeof dep>[]) => ({ station: { eva, name: eva }, at: '2026-10-01T17:49:00Z', departures: deps });
+
+  it('averages every hub into one outlook and lists the main station', () => {
+    const v = splashView(
+      [
+        board('8000261', [dep('ICE 1', '2026-10-01T17:52:00Z', onTime), dep('RE 2', '2026-10-01T17:55:00Z', late)]),
+        board('8000262', [dep('RB 3', '2026-10-01T18:01:00Z', late)]),
+      ],
+      { source: 'all', from: null, to: null, total: { green: 0.81 } as never, daily: [] } as never,
+    );
+    expect(v.window).toBe('19:49–20:49');
+    expect(v.count).toBe(3);
+    expect(v.next.map((r) => r.train)).toEqual(['ICE 1', 'RE 2']);
+    expect(v.bars.reduce((a, b) => a + b.p, 0)).toBeCloseTo(1, 3);
+    // Running share: (0.04+0.02+0.01+0.01 + 2 × (0.2+0.15+0.15+0.07)) / (0.98 + 2 × 0.92)
+    expect(v.lateOver5).toBeCloseTo((0.08 + 2 * 0.57) / (0.98 + 1.84), 3);
+    expect(v.accuracy).toBe('Last 7 days: 81% of low-risk calls held');
+    expect(splashView([board('8000261', [])], null)).toMatchObject({ count: 0, accuracy: null, next: [] });
   });
 });
