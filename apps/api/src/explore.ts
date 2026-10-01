@@ -46,12 +46,10 @@ const evaSchema = { type: 'string', pattern: '^0?[0-9]{7}$' } as const;
 export function registerExploreRoutes(app: FastifyInstance, city: CityConfig, predictor: () => Predictor) {
   app.get('/meta', async () => {
     const p = predictor();
-    // Two horizons: the served model's last training day (its chunk ends are exclusive), and the
-    // day before the last nightly run that refreshed the stats, which include the poller's days.
+    // Two horizons: the served model's last training day, and the day before the last nightly run
+    // that refreshed the stats, which include the poller's days.
     const { rows } = await getPool().query<{ trained_through: string | null; stats_through: string | null; live_at: Date | null }>(
-      `SELECT (SELECT ((max((c->>'end')::timestamptz) AT TIME ZONE 'UTC')::date - 1)::text
-               FROM models m CROSS JOIN LATERAL jsonb_array_elements(m.metrics->'chunks') c
-               WHERE m.kind = 'lgbm' AND m.version = $1) AS trained_through,
+      `SELECT (SELECT max(train_to)::text FROM models WHERE kind = 'lgbm' AND version = $1) AS trained_through,
               (SELECT ((max(started_at) AT TIME ZONE $3)::date - 1)::text
                FROM job_runs WHERE job = 'nightly' AND city_id = $2 AND stats ? 'stats') AS stats_through,
               (SELECT max(last_observed_at) FROM stop_events WHERE source = 'live') AS live_at`,
