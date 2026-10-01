@@ -168,6 +168,22 @@ export interface DeparturesView {
   rows: DepartureRow[];
 }
 
+/** Start screen: the delay outlook for every departure from the Munich hubs in the next hour. */
+export interface SplashView {
+  window: string; // '19:49–20:49'
+  /** Departures from all hubs in the window. */
+  count: number;
+  /** Average forecast over those departures, as six delay ranges that sum to 1 (cancellations left out). */
+  bars: Bar[];
+  /** Share of the running departures likely to be more than 5 min late (the last four bars). */
+  lateOver5: number;
+  /** The next departures from the main station. */
+  station: { eva: string; name: string };
+  next: DepartureRow[];
+  /** 'Last 7 days: 81% of low-risk calls held'; null before there is anything to score. */
+  accuracy: string | null;
+}
+
 export interface HeatCell {
   hour: number;
   avg: number | null; // minutes

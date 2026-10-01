@@ -12,6 +12,7 @@ import type {
   MetaView,
   PatternsView,
   ShareResult,
+  SplashView,
   StationOption,
   TrainStopsView,
   TripEstimate,
@@ -137,4 +138,13 @@ export const useFeatured = (enabled: boolean) =>
     queryFn: () => request<{ featured: FeaturedView | null }>('/bff/featured'),
     enabled,
     staleTime: 5 * 60_000,
+  });
+
+/** Start screen: next-hour outlook for all hubs plus the main station's next departures. */
+export const useSplash = () =>
+  useQuery({
+    queryKey: ['splash'],
+    queryFn: () => request<SplashView>('/bff/splash'),
+    refetchInterval: 60_000,
+    placeholderData: keepPreviousData,
   });

@@ -7,6 +7,7 @@ import type {
   DeparturesView,
   MetaView,
   PatternsView,
+  SplashView,
   StationOption,
 } from '../contract.ts';
 import { CoreApi } from '../core/coreApi.ts';
@@ -21,6 +22,7 @@ import type {
 import { accuracyRunsView, accuracyRunView, accuracyView } from '../view/accuracy.ts';
 import { connectionsView, departuresView, patternsView } from '../view/explore.ts';
 import { MetaService } from './meta.service.ts';
+import { SplashService } from './splash.service.ts';
 
 const GROUPS = ['all', 'long', 'regional'];
 const SOURCES = ['all', 'live', 'replay', 'near'];
@@ -38,11 +40,17 @@ export class ExploreController {
   constructor(
     @Inject(CoreApi) private readonly core: CoreApi,
     @Inject(MetaService) private readonly meta: MetaService,
+    @Inject(SplashService) private readonly splash: SplashService,
   ) {}
 
   @Get('meta')
   getMeta(): Promise<MetaView> {
     return this.meta.get();
+  }
+
+  @Get('splash')
+  getSplash(): Promise<SplashView> {
+    return this.splash.get();
   }
 
   @Get('stations')

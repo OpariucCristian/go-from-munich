@@ -1,8 +1,9 @@
 /**
  * Estimate screen (design 2a): a trip bar on top (route, train number, or pasted share text) and
  * the forecast below it. All state lives in the URL so estimates are linkable and survive reload.
+ * Without any URL state, '/' shows the start screen instead (see App.tsx).
  */
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import type { StationOption } from '../../../bff/src/contract.ts';
 import { useConnections, useEstimate, useFeatured, useTrainStops } from '../api.ts';
@@ -23,18 +24,9 @@ export function EstimatePage() {
   const tf = params.get('tf') ?? undefined;
   const tt = params.get('tt') ?? undefined;
 
-  // Opened without a search: show the upcoming train with the largest predicted delay.
-  const blank = params.size === 0;
+  // Opened from the start screen's suggestion: explain why this train was picked.
   const isFeatured = params.get('featured') === '1';
-  const featured = useFeatured(blank || isFeatured);
-  const pick = featured.data?.featured;
-  useEffect(() => {
-    if (!blank || !pick) return;
-    setParams(
-      { mode: 'train', train: pick.train, date: pick.date, [pick.event === 'dep' ? 'tf' : 'tt']: pick.eva, featured: '1' },
-      { replace: true },
-    );
-  }, [blank, pick, setParams]);
+  const pick = useFeatured(isFeatured).data?.featured;
 
   const update: Update = (patch) => {
     const next = new URLSearchParams(params);
@@ -69,8 +61,7 @@ export function EstimatePage() {
       {mode === 'route' && <RouteResults params={params} date={date} update={update} />}
 
       <section className="est-body" aria-live="polite">
-        {blank && featured.isPending && <Loading label="Finding a train to show…" />}
-        {!train && !(blank && (featured.isPending || pick)) && (
+        {!train && (
           <Empty title="Will my train be late?">
             <p className="muted" style={{ margin: 0, lineHeight: 1.5 }}>
               Pick a route or enter a train number to see how late it's likely to be, stop by stop. In DB Navigator you can also

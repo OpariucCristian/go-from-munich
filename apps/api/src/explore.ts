@@ -152,7 +152,7 @@ export function registerExploreRoutes(app: FastifyInstance, city: CityConfig, pr
            AND COALESCE(e.changed_dep, e.planned_dep) >= $2::timestamptz - interval '1 minute'
            AND t.train_type = ANY($4)
          ORDER BY e.planned_dep, t.train_type, t.train_number
-         LIMIT 60`,
+         LIMIT 150`,
         [await stationEvas(city, eva), at, req.query.minutes ?? 60, trainTypesFor(city, req.query.group)],
       );
       const preds = rows.length
