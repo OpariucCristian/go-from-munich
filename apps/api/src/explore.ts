@@ -141,10 +141,17 @@ export function registerExploreRoutes(app: FastifyInstance, city: CityConfig, pr
       const { rows } = await getPool().query<{
         train_type: string; train_number: string; line: string | null; final_destination: string | null;
         eva: string; planned_dep: Date; dep_delay_min: number | null; dep_cancelled: boolean;
-        last_observed_at: Date | null; source: string;
+        last_observed_at: Date | null; source: string; route_known: boolean;
       }>(
         `SELECT t.train_type, t.train_number, t.line, t.final_destination, e.eva, e.planned_dep,
-                e.dep_delay_min, e.dep_cancelled, e.last_observed_at, e.source
+                e.dep_delay_min, e.dep_cancelled, e.last_observed_at, e.source,
+                EXISTS (
+                  SELECT 1 FROM trips t2
+                  JOIN stop_events e2 ON e2.service_date = t2.service_date AND e2.trip_id = t2.id
+                  WHERE t2.train_type = t.train_type AND t2.train_number = t.train_number
+                    AND t2.service_date BETWEEN $2::date - 90 AND $2::date + 1
+                    AND e2.eva <> e.eva AND e2.planned_arr IS NOT NULL
+                ) AS route_known
          FROM stop_events e JOIN trips t ON t.id = e.trip_id
          WHERE e.eva = ANY($1)
            AND e.service_date BETWEEN ($2::timestamptz - interval '1 day')::date AND ($2::timestamptz + interval '1 day')::date
@@ -167,6 +174,7 @@ export function registerExploreRoutes(app: FastifyInstance, city: CityConfig, pr
         departures: rows.map((r, i) => ({
           // The board can span several EVAs (e.g. Hbf and its Gl.27-36 part); this is the train's own.
           eva: r.eva,
+          routeKnown: r.route_known,
           train: `${r.train_type} ${r.train_number}`,
           trainType: r.train_type,
           trainNumber: r.train_number,

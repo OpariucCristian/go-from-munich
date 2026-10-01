@@ -244,6 +244,7 @@ button { cursor: pointer; }
 .board-head { padding: 10px 0; border-bottom: 2px solid var(--ink); font: 500 12px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .board-row { padding: 14px 0; border-bottom: 1px solid var(--line); text-decoration: none; }
 .board-row:hover { background: var(--surface); }
+.board-row-static:hover { background: none; }
 .board-time { font: 700 17px var(--mono); }
 .board-dest { font-size: 17px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .board-exp { font: 700 17px var(--mono); text-align: right; }
@@ -377,6 +378,7 @@ button { cursor: pointer; }
   column-gap: 12px; row-gap: 5px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--line); text-decoration: none;
 }
 .splash-dep:hover { background: var(--surface); color: var(--ink); }
+.splash-dep-static:hover { background: none; }
 .splash-dep-time { grid-area: time; font: 700 15px var(--mono); }
 .splash-dep-tag { grid-area: tag; }
 .splash-dep .train-tag { font-size: 12px; padding: 2px 6px; }
@@ -454,6 +456,7 @@ button { cursor: pointer; }
   .splash-dep-list > .splash-dep:nth-child(n + 6) { display: grid; }
   .splash-dep { grid-template-columns: 58px 96px minmax(0, 1fr) 240px 52px; grid-template-areas: 'time tag dest split exp'; column-gap: 16px; padding: 15px 0; }
   .splash-dep:hover { background: #efece5; }
+  .splash-dep-static:hover { background: none; }
   .splash-dep-time, .splash-dep-dest, .splash-dep-exp { font-size: 16px; }
   .splash-dep .train-tag { font-size: 13px; }
   .splash-split { height: 6px; border-radius: 3px; }

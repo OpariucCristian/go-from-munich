@@ -152,6 +152,11 @@ describe('timelineQueries', () => {
     expect(() => timelineQueries(run, 'ICE', '514', '8000013', '8004158')).toThrow(/does not run/);
   });
 
+  it('explains a train only seen at one station', () => {
+    const seen: CoreTrainStops = { ...run, stops: [run.stops[0]!] };
+    expect(() => timelineQueries(seen, 'RE', '59272', '8000261')).toThrow(/only know RE 59272 at München Hbf/);
+  });
+
   it('parses train names', () => {
     expect(parseTrain(' ice514 ')).toEqual({ type: 'ICE', number: '514' });
     expect(() => parseTrain('Berlin')).toThrow();
@@ -348,8 +353,9 @@ describe('featured view', () => {
 });
 
 describe('splash view', () => {
-  const dep = (train: string, planned: string, p: CorePrediction) => ({
+  const dep = (train: string, planned: string, p: CorePrediction, routeKnown = true) => ({
     eva: '8098261',
+    routeKnown,
     train,
     trainType: train.split(' ')[0]!,
     trainNumber: train.split(' ')[1]!,
@@ -364,14 +370,14 @@ describe('splash view', () => {
   it('averages every hub into one outlook and lists the main station', () => {
     const v = splashView(
       [
-        board('8000261', [dep('ICE 1', '2026-10-01T17:52:00Z', onTime), dep('RE 2', '2026-10-01T17:55:00Z', late)]),
+        board('8000261', [dep('ICE 1', '2026-10-01T17:52:00Z', onTime), dep('RE 2', '2026-10-01T17:55:00Z', late, false)]),
         board('8000262', [dep('RB 3', '2026-10-01T18:01:00Z', late)]),
       ],
       { source: 'all', from: null, to: null, total: { green: 0.81 } as never, daily: [] } as never,
     );
     expect(v.window).toBe('19:49–20:49');
     expect(v.count).toBe(3);
-    expect(v.next.map((r) => [r.train, r.eva])).toEqual([['ICE 1', '8098261'], ['RE 2', '8098261']]);
+    expect(v.next.map((r) => [r.train, r.eva, r.linkable])).toEqual([['ICE 1', '8098261', true], ['RE 2', '8098261', false]]);
     expect(v.bars.reduce((a, b) => a + b.p, 0)).toBeCloseTo(1, 3);
     // Running share: (0.04+0.02+0.01+0.01 + 2 × (0.2+0.15+0.15+0.07)) / (0.98 + 2 × 0.92)
     expect(v.lateOver5).toBeCloseTo((0.08 + 2 * 0.57) / (0.98 + 1.84), 3);

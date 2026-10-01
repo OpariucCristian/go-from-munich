@@ -67,8 +67,8 @@ export function DeparturesPage() {
 function BoardRow({ row: r }: { row: DepartureRow }) {
   const href = `/?${new URLSearchParams({ mode: 'train', train: r.train, date: berlinDateOf(r.planned), tf: r.eva })}`;
   const [onTime, mid, late] = r.split;
-  return (
-    <Link className="board-row" role="row" to={href}>
+  const cells = (
+    <>
       <div role="cell" className="board-time c-time">
         {r.time}
       </div>
@@ -97,6 +97,18 @@ function BoardRow({ row: r }: { row: DepartureRow }) {
           </div>
         )}
       </div>
+    </>
+  );
+  if (!r.linkable) {
+    return (
+      <div className="board-row board-row-static" role="row" title="We only know this train at this station so far, so there is no route to forecast yet">
+        {cells}
+      </div>
+    );
+  }
+  return (
+    <Link className="board-row" role="row" to={href}>
+      {cells}
     </Link>
   );
 }
