@@ -1,0 +1,520 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-06T18:17:18.179Z",
+  "title": "Design System: Spät",
+  "extensions": {
+    "colorMeta": {
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "#f5f3ee",
+        "oklch": "oklch(96.4% 0.007 88.6)",
+        "tonalRamp": [
+          "#0c0b08",
+          "#252420",
+          "#41403c",
+          "#5f5d59",
+          "#82807c",
+          "#a6a4a0",
+          "#cccac5",
+          "#f0eee9"
+        ]
+      },
+      "paper-shade": {
+        "role": "neutral",
+        "displayName": "Paper Shade",
+        "canonical": "#efece5",
+        "oklch": "oklch(94.3% 0.010 87.5)",
+        "tonalRamp": [
+          "#0d0b07",
+          "#26241f",
+          "#423f3a",
+          "#605d57",
+          "#83807a",
+          "#a7a49e",
+          "#cdcac3",
+          "#f1eee7"
+        ]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Canvas",
+        "canonical": "#e4e1d9",
+        "oklch": "oklch(91.0% 0.011 89.7)",
+        "tonalRamp": [
+          "#0d0b06",
+          "#26241e",
+          "#424039",
+          "#605d57",
+          "#838079",
+          "#a7a49d",
+          "#cdcac2",
+          "#f1eee6"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface",
+        "canonical": "#ffffff",
+        "oklch": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#242424",
+          "#404040",
+          "#5d5d5d",
+          "#808080",
+          "#a4a4a4",
+          "#cacaca",
+          "#eeeeee"
+        ]
+      },
+      "sunken": {
+        "role": "neutral",
+        "displayName": "Sunken",
+        "canonical": "#eae7e0",
+        "oklch": "oklch(92.8% 0.010 87.5)",
+        "tonalRamp": [
+          "#0d0b07",
+          "#26241f",
+          "#423f3a",
+          "#605d57",
+          "#83807a",
+          "#a7a49e",
+          "#cdcac3",
+          "#f1eee7"
+        ]
+      },
+      "track": {
+        "role": "neutral",
+        "displayName": "Track",
+        "canonical": "#edeae3",
+        "oklch": "oklch(93.7% 0.010 87.5)",
+        "tonalRamp": [
+          "#0d0b07",
+          "#26241f",
+          "#423f3a",
+          "#605d57",
+          "#83807a",
+          "#a7a49e",
+          "#cdcac3",
+          "#f1eee7"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Line",
+        "canonical": "#dad6cd",
+        "oklch": "oklch(87.7% 0.013 86.8)",
+        "tonalRamp": [
+          "#0e0b06",
+          "#27241d",
+          "#433f38",
+          "#615d55",
+          "#838078",
+          "#a8a49c",
+          "#cecac1",
+          "#f2eee5"
+        ]
+      },
+      "rail": {
+        "role": "neutral",
+        "displayName": "Rail",
+        "canonical": "#c9c5bb",
+        "oklch": "oklch(82.4% 0.014 88.7)",
+        "tonalRamp": [
+          "#0e0b05",
+          "#27241c",
+          "#433f37",
+          "#615d55",
+          "#848077",
+          "#a8a49b",
+          "#cecac0",
+          "#f2eee4"
+        ]
+      },
+      "ink": {
+        "role": "primary",
+        "displayName": "Ledger Ink",
+        "canonical": "#15171c",
+        "oklch": "oklch(20.5% 0.010 268.2)",
+        "tonalRamp": [
+          "#090b10",
+          "#222429",
+          "#3d4045",
+          "#5b5d64",
+          "#7d8087",
+          "#a2a4ab",
+          "#c7cad2",
+          "#ebeef6"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted",
+        "canonical": "#5e6169",
+        "oklch": "oklch(49.3% 0.013 269.4)",
+        "tonalRamp": [
+          "#090b11",
+          "#21242b",
+          "#3d4047",
+          "#5a5d65",
+          "#7d8088",
+          "#a1a4ad",
+          "#c7cad3",
+          "#ebeef8"
+        ]
+      },
+      "pewter": {
+        "role": "neutral",
+        "displayName": "Pewter",
+        "canonical": "#8c8f96",
+        "oklch": "oklch(65.0% 0.011 267.3)",
+        "tonalRamp": [
+          "#090b10",
+          "#222429",
+          "#3d4046",
+          "#5b5e64",
+          "#7d8087",
+          "#a1a4ac",
+          "#c7cad2",
+          "#ebeef6"
+        ]
+      },
+      "leaf-green": {
+        "role": "secondary",
+        "displayName": "Leaf Green",
+        "canonical": "#2f8f5b",
+        "oklch": "oklch(58.1% 0.120 155.6)",
+        "tonalRamp": [
+          "#000f05",
+          "#012d16",
+          "#004d2a",
+          "#037040",
+          "#369561",
+          "#5fbb84",
+          "#86e2a9",
+          "#c5ffd8"
+        ]
+      },
+      "mustard": {
+        "role": "secondary",
+        "displayName": "Mustard",
+        "canonical": "#e5b340",
+        "oklch": "oklch(79.2% 0.140 84.4)",
+        "tonalRamp": [
+          "#110a00",
+          "#302101",
+          "#523c00",
+          "#775801",
+          "#a27905",
+          "#cd9c1f",
+          "#f5c252",
+          "#ffecc8"
+        ]
+      },
+      "saffron": {
+        "role": "secondary",
+        "displayName": "Saffron",
+        "canonical": "#d9971a",
+        "oklch": "oklch(72.3% 0.146 76.2)",
+        "tonalRamp": [
+          "#130900",
+          "#332000",
+          "#563903",
+          "#7d5402",
+          "#aa7400",
+          "#d89618",
+          "#ffbd53",
+          "#feecd1"
+        ]
+      },
+      "paprika": {
+        "role": "secondary",
+        "displayName": "Paprika",
+        "canonical": "#d0702a",
+        "oklch": "oklch(64.4% 0.145 52.3)",
+        "tonalRamp": [
+          "#170600",
+          "#3c1900",
+          "#652e00",
+          "#914500",
+          "#c16317",
+          "#ea8845",
+          "#feb98e",
+          "#feeade"
+        ]
+      },
+      "brick": {
+        "role": "secondary",
+        "displayName": "Brick",
+        "canonical": "#c8412e",
+        "oklch": "oklch(56.6% 0.175 31.0)",
+        "tonalRamp": [
+          "#1f0000",
+          "#490400",
+          "#7a0b00",
+          "#aa2110",
+          "#d44c39",
+          "#ff735d",
+          "#ffb5a7",
+          "#ffe9e5"
+        ]
+      },
+      "chili": {
+        "role": "secondary",
+        "displayName": "Chili",
+        "canonical": "#9e2f20",
+        "oklch": "oklch(47.2% 0.149 30.9)",
+        "tonalRamp": [
+          "#1f0000",
+          "#4a0400",
+          "#7a0c01",
+          "#a13222",
+          "#ca5746",
+          "#f37d69",
+          "#feb6a8",
+          "#fee9e5"
+        ]
+      },
+      "oxblood": {
+        "role": "secondary",
+        "displayName": "Oxblood",
+        "canonical": "#6e1f15",
+        "oklch": "oklch(36.5% 0.114 30.5)",
+        "tonalRamp": [
+          "#1f0000",
+          "#4a0200",
+          "#702116",
+          "#934134",
+          "#ba6456",
+          "#e38979",
+          "#feb6a8",
+          "#fee9e5"
+        ]
+      },
+      "honey": {
+        "role": "secondary",
+        "displayName": "Honey",
+        "canonical": "#e0a93a",
+        "oklch": "oklch(76.7% 0.138 81.0)",
+        "tonalRamp": [
+          "#120900",
+          "#312101",
+          "#543b00",
+          "#7a5702",
+          "#a57707",
+          "#d09a25",
+          "#f8c055",
+          "#ffeccc"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The start-screen question only."
+      },
+      "figure": {
+        "displayName": "Figure",
+        "purpose": "The single answer on Estimate; a sibling carries the start screen late figure."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Page titles."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Section titles; card titles use 600 at 15px."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Explanations, notes, footers."
+      },
+      "data": {
+        "displayName": "Data",
+        "purpose": "Times, expected delays, percentages, stat strips, train tags."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Uppercase eyebrows, column heads, axis text."
+      }
+    },
+    "shadows": [
+      {
+        "name": "float",
+        "value": "0 1px 2px rgba(0, 0, 0, 0.06), 0 12px 40px rgba(0, 0, 0, 0.08)",
+        "purpose": "Station-picker dropdowns and chart tooltips only."
+      }
+    ],
+    "motion": [
+      {
+        "name": "bar-grow",
+        "value": "height 0.3s",
+        "purpose": "Chart and outlook bars animate to their new probability."
+      },
+      {
+        "name": "shimmer",
+        "value": "shimmer 1.2s infinite linear",
+        "purpose": "Skeleton loading sweep from sunken to track."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone",
+        "value": "860px",
+        "purpose": "max-width: single column, bottom tab bar, two-row board grids"
+      },
+      {
+        "name": "compact",
+        "value": "1100px",
+        "purpose": "max-width: two-column screens collapse to one"
+      },
+      {
+        "name": "wide",
+        "value": "1400px",
+        "purpose": "min-width: start screen capped near 1440px and centred"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Ink-solid main action, e.g. Estimate.",
+      "html": "<button class=\"ds-btn\">Estimate</button>",
+      "css": ".ds-btn { font-family: 'Schibsted Grotesk', system-ui, sans-serif; border: 0; border-radius: 8px; padding: 11px 16px; background: var(--ink, #15171c); color: var(--paper, #f5f3ee); font-weight: 700; font-size: 15px; cursor: pointer; } .ds-btn:focus-visible { outline: 2px solid var(--ink, #15171c); outline-offset: 2px; } .ds-btn:disabled { opacity: 0.5; cursor: default; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Hairline secondary action, e.g. previous/next step.",
+      "html": "<button class=\"ds-btn-ghost\">Next step</button>",
+      "css": ".ds-btn-ghost { font-family: 'Schibsted Grotesk', system-ui, sans-serif; border: 1px solid var(--line, #dad6cd); border-radius: 8px; padding: 11px 16px; background: transparent; color: var(--ink, #15171c); font-weight: 600; font-size: 15px; cursor: pointer; } .ds-btn-ghost:focus-visible { outline: 2px solid var(--ink, #15171c); outline-offset: 2px; }"
+    },
+    {
+      "name": "Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Labelled input box: muted label above a bold value.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">Train</span><input placeholder=\"ICE 514\" /></label>",
+      "css": ".ds-field { font-family: 'Schibsted Grotesk', system-ui, sans-serif; display: block; background: var(--surface, #fff); border: 1px solid var(--line, #dad6cd); border-radius: 8px; padding: 8px 14px; width: 260px; } .ds-field:focus-within { border-color: var(--ink, #15171c); } .ds-field-label { font-size: 12px; color: var(--muted, #5e6169); display: block; } .ds-field input { font-family: 'Schibsted Grotesk', system-ui, sans-serif; width: 100%; border: 0; outline: 0; padding: 2px 0 0; background: transparent; font-size: 16px; font-weight: 600; color: var(--ink, #15171c); }"
+    },
+    {
+      "name": "Chips",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Capsule filters; selected inverts to ink.",
+      "html": "<div class=\"ds-chips\"><button class=\"ds-chip\" aria-pressed=\"true\">Departures</button><button class=\"ds-chip\" aria-pressed=\"false\">Arrivals</button></div>",
+      "css": ".ds-chips { display: flex; gap: 8px; } .ds-chip { font-family: 'Schibsted Grotesk', system-ui, sans-serif; border: 1px solid var(--line, #dad6cd); border-radius: 999px; padding: 7px 14px; background: transparent; color: var(--ink, #15171c); font-size: 14px; font-weight: 600; cursor: pointer; } .ds-chip[aria-pressed='true'] { background: var(--ink, #15171c); color: var(--paper, #f5f3ee); border-color: var(--ink, #15171c); } .ds-chip:focus-visible { outline: 2px solid var(--ink, #15171c); outline-offset: 2px; }"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "custom",
+      "refersTo": "segmented",
+      "description": "Sunken trough; selected segment becomes a white tile.",
+      "html": "<div class=\"ds-seg\"><button aria-pressed=\"true\">Train</button><button aria-pressed=\"false\">Route</button><button aria-pressed=\"false\">Station</button></div>",
+      "css": ".ds-seg { font-family: 'Schibsted Grotesk', system-ui, sans-serif; display: inline-flex; background: var(--sunken, #eae7e0); border-radius: 8px; padding: 4px; gap: 4px; } .ds-seg button { font-family: 'Schibsted Grotesk', system-ui, sans-serif; padding: 8px 14px; border: 0; background: transparent; border-radius: 6px; color: var(--muted, #5e6169); font-size: 14px; font-weight: 600; cursor: pointer; } .ds-seg button[aria-pressed='true'] { background: var(--surface, #fff); color: var(--ink, #15171c); } .ds-seg button:focus-visible { outline: 2px solid var(--ink, #15171c); outline-offset: 2px; }"
+    },
+    {
+      "name": "Top Navigation",
+      "kind": "nav",
+      "description": "Muted links, 2px ink underline when active, mono status line.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-brand\" href=\"#\">Spät</a><a class=\"active\" href=\"#\">Estimate</a><a href=\"#\">Departures</a><a href=\"#\">Accuracy</a><span class=\"ds-nav-meta\">Model · data through · live</span></nav>",
+      "css": ".ds-nav { font-family: 'Schibsted Grotesk', system-ui, sans-serif; display: flex; align-items: center; gap: 26px; height: 60px; padding: 0 28px; background: var(--paper, #f5f3ee); border-bottom: 1px solid var(--line, #dad6cd); font-size: 15px; font-weight: 500; } .ds-nav a { color: var(--muted, #5e6169); text-decoration: none; padding: 19px 0; border-bottom: 2px solid transparent; } .ds-nav a:hover { color: var(--ink, #15171c); } .ds-nav a.active { color: var(--ink, #15171c); border-bottom-color: var(--ink, #15171c); } .ds-nav a.ds-brand { color: var(--ink, #15171c); font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin-right: 10px; } .ds-nav-meta { font-family: 'JetBrains Mono', ui-monospace, monospace; margin-left: auto; font-size: 13px; color: var(--muted, #5e6169); }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "White surface, hairline border, no shadow.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-title\">Connection risk</div><div class=\"ds-card-v\">14%</div><div class=\"ds-card-note\">Chance of missing the connection</div></div>",
+      "css": ".ds-card { font-family: 'Schibsted Grotesk', system-ui, sans-serif; background: var(--surface, #fff); border: 1px solid var(--line, #dad6cd); border-radius: 10px; padding: 20px 22px; display: flex; flex-direction: column; gap: 6px; width: 280px; } .ds-card-title { font-size: 15px; font-weight: 600; } .ds-card-v { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 28px; font-weight: 700; color: var(--warn, #d9971a); } .ds-card-note { font-size: 13px; color: var(--muted, #5e6169); line-height: 1.4; }"
+    },
+    {
+      "name": "Train Tag",
+      "kind": "custom",
+      "refersTo": "train-tag",
+      "description": "Ink-outlined mono train number; the ledger line-item marker.",
+      "html": "<span class=\"ds-tag\">ICE 514</span>",
+      "css": ".ds-tag { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; font-weight: 700; border: 1.5px solid var(--ink, #15171c); border-radius: 4px; padding: 2px 7px; color: var(--ink, #15171c); white-space: nowrap; }"
+    },
+    {
+      "name": "Delay Spread Chart",
+      "kind": "custom",
+      "description": "One column per bucket in Ripening colours on an ink baseline.",
+      "html": "<div class=\"ds-spread\"><div class=\"ds-col\"><b>58%</b><div class=\"ds-well\"><i style=\"height:92.80000000000001%;background:#2f8f5b\"></i></div><span>≤2</span></div><div class=\"ds-col\"><b>17%</b><div class=\"ds-well\"><i style=\"height:27.200000000000003%;background:#e5b340\"></i></div><span>3–5</span></div><div class=\"ds-col\"><b>11%</b><div class=\"ds-well\"><i style=\"height:17.6%;background:#d9971a\"></i></div><span>6–10</span></div><div class=\"ds-col\"><b>6%</b><div class=\"ds-well\"><i style=\"height:9.600000000000001%;background:#d0702a\"></i></div><span>11–15</span></div><div class=\"ds-col\"><b>4%</b><div class=\"ds-well\"><i style=\"height:6.4%;background:#c8412e\"></i></div><span>16–30</span></div><div class=\"ds-col\"><b>1%</b><div class=\"ds-well\"><i style=\"height:1.6%;background:#9e2f20\"></i></div><span>31–60</span></div></div>",
+      "css": ".ds-spread { font-family: 'JetBrains Mono', ui-monospace, monospace; display: flex; gap: 12px; width: 420px; } .ds-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; } .ds-col b { font-size: 14px; color: var(--ink, #15171c); } .ds-well { height: 140px; width: 100%; display: flex; align-items: flex-end; border-bottom: 1px solid var(--ink, #15171c); } .ds-well i { display: block; width: 100%; min-height: 2px; border-radius: 3px 3px 0 0; transition: height 0.3s; } .ds-col span { font-size: 13px; font-weight: 500; color: var(--muted, #5e6169); }"
+    },
+    {
+      "name": "Split Bar",
+      "kind": "custom",
+      "description": "Forecast compressed to on time / 3–10 / >10 on a sunken track.",
+      "html": "<div class=\"ds-split\"><div style=\"width:58%;background:#2f8f5b\">58%</div><div style=\"width:28%;background:#e0a93a;color:#15171c\">28%</div><div style=\"width:11%;background:#c8412e\">11%</div></div>",
+      "css": ".ds-split { font-family: 'JetBrains Mono', ui-monospace, monospace; display: flex; width: 320px; height: 22px; border-radius: 4px; overflow: hidden; font-size: 12px; font-weight: 700; color: #fff; background: var(--sunken, #eae7e0); } .ds-split > div { display: flex; align-items: center; padding-left: 6px; overflow: hidden; white-space: nowrap; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Forecaster's Ledger",
+    "overview": "Spät reads like the notebook of a careful analyst who shows their working. Every forecast is a set of odds written in ink on warm paper, ruled into columns, with its sources and its track record kept right alongside. The mood is **precise, candid and unhurried**. Nothing shouts, nothing is decorated for its own sake, and doubt is written down rather than hidden. Big monospaced figures carry the answer. Everything else steps back so the numbers lead.\n\nDensity is moderate, like a ledger page rather than a cockpit. Departure boards, journey rails and stat strips use generous rows, hairline rules and tabular figures, so a rider can scan them and an engineer can audit them. Colour is held back almost entirely for meaning. The one expressive register is the Ripening scale, which runs from leaf green to oxblood and says how late a train will probably be.\n\nIt must never pass for an official Deutsche Bahn product (no DB corporate red as a brand colour, no Navigator look), a generic SaaS dashboard (gradient KPI tiles, purple accents, glassmorphism), or a neon dark-mode \"data\" screen.",
+    "keyCharacteristics": [
+      "Warm off-white paper, near-black ink, white surfaces for content",
+      "Monospaced figures for every time, percentage and delay; grotesk for words",
+      "1px warm-grey rules do the structuring; borders, not shadows",
+      "Colour means delay risk, and nothing else",
+      "Quiet, exact controls with ink-solid primaries and hairline ghosts"
+    ],
+    "rules": [
+      {
+        "name": "The Colour Means Delay Rule",
+        "body": "Ripening colours are reserved for delay risk and its tones (good / warn / bad). Never use them for decoration, category coding or brand accent.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ink Is The Accent Rule",
+        "body": "Interactive emphasis is always ink on paper. If something needs to look selected or primary, invert it to ink. Don't add a hue.",
+        "section": "colors"
+      },
+      {
+        "name": "The Not-DB-Red Rule",
+        "body": "The \"bad\" tone is Brick, a warm rust. No pure signal red, and no red used as a brand surface.",
+        "section": "colors"
+      },
+      {
+        "name": "The Numbers Are Mono Rule",
+        "body": "Every time, percentage, minute count and train number is set in JetBrains Mono. Words never are, except uppercase labels.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Big Figure Rule",
+        "body": "Each screen has at most one display-scale figure: the answer. Everything else is data-size.",
+        "section": "typography"
+      },
+      {
+        "name": "The Ruled Columns Rule",
+        "body": "Lists are rows separated by 1px `line` rules, with a 2px `ink` rule under the column head. Don't use zebra striping or spaced-out row cards.",
+        "section": "layout"
+      },
+      {
+        "name": "The Borders Before Shadows Rule",
+        "body": "Separate things with a `line` hairline or a tonal step first. A shadow means \"this floats over the page\".",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do set every number in JetBrains Mono, and give each screen one display-scale answer at most.",
+      "Do colour only by delay risk, in Ripening order: leaf green (≤2) through oxblood (>60), with pewter for cancelled.",
+      "Do structure with 1px `line` rules and paper → surface tonal steps before reaching for a shadow.",
+      "Do show selection by inverting to ink (chips, segments, current stop and connection outlines).",
+      "Do keep the attribution footer (\"Delay data © Deutsche Bahn AG (CC BY 4.0)… Forecasts are estimates, not guarantees.\") on every screen."
+    ],
+    "donts": [
+      "Don't use DB corporate red as a brand colour, or anything that reads as DB Navigator or an official DB product.",
+      "Don't build generic SaaS-dashboard furniture: gradient KPI tiles, purple accents, glassmorphism.",
+      "Don't go neon or default to a dark \"data terminal\" look. The ledger is ink on warm paper.",
+      "Don't use Ripening colours for decoration, categories or emphasis unrelated to delay.",
+      "Don't add shadows to cards or rows at rest. The Float shadow is for dropdowns and tooltips."
+    ]
+  }
+}
