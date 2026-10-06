@@ -6,6 +6,19 @@ export const pct = (p: number) => `${Math.round(p * 100)}%`;
 export const toneClass = (t: Tone) => `tone-${t}`;
 export const toneColor = (t: Tone) => `var(--${t})`;
 
+/** Ripening-scale colour per delay bucket, in order ≤2 | 3–5 | 6–10 | 11–15 | 16–30 | 31–60 | >60 | cancelled. */
+export const BUCKET_COLORS = ['var(--b0)', 'var(--b1)', 'var(--b2)', 'var(--b3)', 'var(--b4)', 'var(--b5)', 'var(--b6)', 'var(--cancelled)'];
+
+/** The three-part split used on departure lists: [on time, 3–10 min, over 10 min]. */
+export const SPLIT_COLORS = ['var(--good)', 'var(--split-mid)', 'var(--bad)'] as const;
+
+/** Screen-reader text for a split; `cancelled` is appended when the caller shows it. */
+export function splitLabel([onTime, mid, late]: readonly number[], cancelled?: number) {
+  const parts = [`${pct(onTime!)} on time`, `${pct(mid!)} 3 to 10 minutes late`, `${pct(late!)} more than 10 minutes late`];
+  if (cancelled !== undefined) parts.push(`${pct(cancelled)} cancelled`);
+  return parts.join(', ');
+}
+
 export function Segmented<T extends string>(props: {
   options: { value: T; label: string }[];
   value: T;

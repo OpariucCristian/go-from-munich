@@ -1,6 +1,8 @@
-/* Spät: tokens and components, following the "Spät Delay Forecast" design. */
+/* Spät: tokens and components. DESIGN.md is the reference for every token here. */
 :root {
+  /* neutrals: paper and ink */
   --paper: #f5f3ee;
+  --paper-shade: #efece5;
   --canvas: #e4e1d9;
   --surface: #ffffff;
   --sunken: #eae7e0;
@@ -9,19 +11,32 @@
   --rail: #c9c5bb;
   --ink: #15171c;
   --muted: #5e6169;
-  --neutral: #8c8f96;
+  --pewter: #8c8f96;
 
-  --good: #2f8f5b;
-  --warn: #d9971a;
-  --bad: #c8412e;
-  --b0: #2f8f5b;
-  --b1: #e5b340;
-  --b2: #d9971a;
-  --b3: #d0702a;
-  --b4: #c8412e;
-  --b5: #9e2f20;
-  --b6: #6e1f15;
-  --split-mid: #e0a93a;
+  /* the Ripening scale: colour only ever means delay */
+  --leaf-green: #2f8f5b;
+  --mustard: #e5b340;
+  --saffron: #d9971a;
+  --paprika: #d0702a;
+  --brick: #c8412e;
+  --chili: #9e2f20;
+  --oxblood: #6e1f15;
+  --honey: #e0a93a;
+
+  /* roles: tones (contract Tone), delay buckets ≤2 … >60, and the three-part split */
+  --good: var(--leaf-green);
+  --warn: var(--saffron);
+  --bad: var(--brick);
+  --b0: var(--leaf-green);
+  --b1: var(--mustard);
+  --b2: var(--saffron);
+  --b3: var(--paprika);
+  --b4: var(--brick);
+  --b5: var(--chili);
+  --b6: var(--oxblood);
+  --cancelled: var(--pewter);
+  --split-mid: var(--honey);
+  --neutral: var(--pewter);
 
   --sans: 'Schibsted Grotesk', system-ui, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, monospace;
@@ -133,7 +148,7 @@ button { cursor: pointer; }
 /* trip bar */
 .tripbar {
   display: flex; align-items: center; gap: 10px; padding: 14px 28px; border-bottom: 1px solid var(--line);
-  background: #efece5; flex-wrap: wrap;
+  background: var(--paper-shade); flex-wrap: wrap;
 }
 .tripbar .segmented { background: var(--canvas); flex: none; }
 .tripbar .segmented.inline button { padding: 8px 12px; font-size: 14px; }
@@ -232,7 +247,7 @@ button { cursor: pointer; }
 .empty h2 { font-size: 30px; letter-spacing: -0.02em; margin: 0; }
 .notice { font-size: 14px; background: var(--sunken); border-radius: var(--r); padding: 10px 14px; }
 .featured-note { line-height: 1.45; max-width: 760px; }
-.error { font-size: 14px; border: 1px solid var(--bad); color: var(--bad); border-radius: var(--r); padding: 10px 14px; background: #fff; }
+.error { font-size: 14px; border: 1px solid var(--bad); color: var(--bad); border-radius: var(--r); padding: 10px 14px; background: var(--surface); }
 .skeleton { background: linear-gradient(90deg, var(--sunken), var(--track), var(--sunken)); background-size: 200% 100%; animation: shimmer 1.2s infinite linear; border-radius: var(--r); }
 @keyframes shimmer { to { background-position: -200% 0; } }
 
@@ -455,7 +470,7 @@ button { cursor: pointer; }
   .splash-dep-list { border-top: 0; }
   .splash-dep-list > .splash-dep:nth-child(n + 6) { display: grid; }
   .splash-dep { grid-template-columns: 58px 96px minmax(0, 1fr) 240px 52px; grid-template-areas: 'time tag dest split exp'; column-gap: 16px; padding: 15px 0; }
-  .splash-dep:hover { background: #efece5; }
+  .splash-dep:hover { background: var(--paper-shade); }
   .splash-dep-static:hover { background: none; }
   .splash-dep-time, .splash-dep-dest, .splash-dep-exp { font-size: 16px; }
   .splash-dep .train-tag { font-size: 13px; }

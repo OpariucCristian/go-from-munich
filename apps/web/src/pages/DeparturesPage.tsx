@@ -2,7 +2,7 @@
 import { Link, useSearchParams } from 'react-router';
 import type { DepartureRow } from '../../../bff/src/contract.ts';
 import { useDepartures, useMeta } from '../api.ts';
-import { Chips, ErrorNote, Skeleton, pct, toneClass } from '../components/ui.tsx';
+import { Chips, ErrorNote, SPLIT_COLORS, Skeleton, pct, splitLabel, toneClass } from '../components/ui.tsx';
 import { berlinDateOf } from '../dates.ts';
 
 const GROUPS = [
@@ -45,9 +45,9 @@ export function DeparturesPage() {
           <div role="columnheader">Train</div>
           <div role="columnheader">Destination</div>
           <div role="columnheader" className="legend">
-            <span><span className="swatch" style={{ background: 'var(--good)' }} />On time</span>
-            <span><span className="swatch" style={{ background: 'var(--split-mid)' }} />3–10</span>
-            <span><span className="swatch" style={{ background: 'var(--bad)' }} />&gt;10 min</span>
+            <span><span className="swatch" style={{ background: SPLIT_COLORS[0] }} />On time</span>
+            <span><span className="swatch" style={{ background: SPLIT_COLORS[1] }} />3–10</span>
+            <span><span className="swatch" style={{ background: SPLIT_COLORS[2] }} />&gt;10 min</span>
           </div>
           <div role="columnheader" style={{ textAlign: 'right' }} title="Most likely delay">Likely</div>
         </div>
@@ -66,7 +66,6 @@ export function DeparturesPage() {
 
 function BoardRow({ row: r }: { row: DepartureRow }) {
   const href = `/?${new URLSearchParams({ mode: 'train', train: r.train, date: berlinDateOf(r.planned), tf: r.eva })}`;
-  const [onTime, mid, late] = r.split;
   const cells = (
     <>
       <div role="cell" className="board-time c-time">
@@ -82,10 +81,13 @@ function BoardRow({ row: r }: { row: DepartureRow }) {
         {r.live?.cancelled ? (
           <span className="tone-bad" style={{ fontWeight: 700 }}>Cancelled</span>
         ) : (
-          <div className="splitbar" aria-label={`${pct(onTime)} on time, ${pct(mid)} 3 to 10 minutes late, ${pct(late)} more than 10 minutes late, ${pct(r.cancelled)} cancelled`}>
-            <div style={{ width: pct(onTime), background: 'var(--good)' }}>{onTime >= 0.12 ? pct(onTime) : ''}</div>
-            <div style={{ width: pct(mid), background: 'var(--split-mid)', color: 'var(--ink)' }}>{mid >= 0.12 ? pct(mid) : ''}</div>
-            <div style={{ width: pct(late), background: 'var(--bad)' }}>{late >= 0.12 ? pct(late) : ''}</div>
+          <div className="splitbar" aria-label={splitLabel(r.split, r.cancelled)}>
+            {r.split.map((p, i) => (
+              // The honey middle segment is too light for white text.
+              <div key={i} style={{ width: pct(p), background: SPLIT_COLORS[i], color: i === 1 ? 'var(--ink)' : undefined }}>
+                {p >= 0.12 ? pct(p) : ''}
+              </div>
+            ))}
           </div>
         )}
       </div>

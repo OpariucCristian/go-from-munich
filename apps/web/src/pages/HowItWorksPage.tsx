@@ -14,9 +14,8 @@ import {
   type Distribution,
 } from '../../../../packages/core/src/buckets.ts';
 import { useWidth } from '../components/AccuracyCharts.tsx';
-import { pct } from '../components/ui.tsx';
+import { BUCKET_COLORS, pct } from '../components/ui.tsx';
 
-const COLORS = ['var(--b0)', 'var(--b1)', 'var(--b2)', 'var(--b3)', 'var(--b4)', 'var(--b5)', 'var(--b6)', 'var(--neutral)'];
 const MIN_TRANSFER_MIN = 6; // munich.minTransferMin
 
 /** dirichletStep in packages/model/src/baseline.ts: the group's weights plus `alpha` pseudo-observations of its parent. */
@@ -293,7 +292,7 @@ function Bars({ dist, prev }: { dist: Distribution; prev: Distribution | null })
         <div className="chart-col" key={i}>
           <div className="chart-pct">{pct(p)}</div>
           <div className="chart-well how-well">
-            <div className="chart-bar" style={{ height: `${(p / max) * 100}%`, background: COLORS[i] }} />
+            <div className="chart-bar" style={{ height: `${(p / max) * 100}%`, background: BUCKET_COLORS[i] }} />
             {prev && <div className="how-ghost" style={{ bottom: `${(prev[i]! / max) * 100}%` }} />}
           </div>
           <div className="chart-label">{i === 7 ? 'canc.' : BUCKET_LABELS[i]}</div>

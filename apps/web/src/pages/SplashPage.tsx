@@ -9,13 +9,12 @@ import { Link, useNavigate } from 'react-router';
 import type { DepartureRow, SplashView, StationOption } from '../../../bff/src/contract.ts';
 import { useFeatured, useSplash } from '../api.ts';
 import { StationPicker } from '../components/StationPicker.tsx';
-import { ErrorNote, Segmented, Skeleton, pct, toneClass } from '../components/ui.tsx';
+import { BUCKET_COLORS, ErrorNote, SPLIT_COLORS, Segmented, Skeleton, pct, splitLabel, toneClass } from '../components/ui.tsx';
 import { berlinDateOf, berlinNowHm, berlinToday } from '../dates.ts';
 
 type Tab = 'train' | 'route' | 'station';
 const HBF: StationOption = { eva: '8000261', name: 'München Hbf' };
 const PASING: StationOption = { eva: '8004158', name: 'München-Pasing' };
-const BAR_COLORS = ['var(--b0)', 'var(--b1)', 'var(--b2)', 'var(--b3)', 'var(--b4)', 'var(--b5)'];
 
 const estimateHref = (p: Record<string, string>) => `/?${new URLSearchParams(p)}`;
 const routeHref = (from: StationOption, to: StationOption) =>
@@ -167,9 +166,9 @@ function Departures({ s }: { s: SplashView }) {
         ))}
       </div>
       <div className="splash-legend" aria-hidden>
-        <span><i style={{ background: 'var(--good)' }} />on time</span>
-        <span><i style={{ background: 'var(--split-mid)' }} />3–10 min</span>
-        <span><i style={{ background: 'var(--bad)' }} />over 10 min</span>
+        <span><i style={{ background: SPLIT_COLORS[0] }} />on time</span>
+        <span><i style={{ background: SPLIT_COLORS[1] }} />3–10 min</span>
+        <span><i style={{ background: SPLIT_COLORS[2] }} />over 10 min</span>
       </div>
       <div className="splash-deps-foot">
         <span className="muted">Next departures, {s.station.name}</span>
@@ -180,7 +179,6 @@ function Departures({ s }: { s: SplashView }) {
 }
 
 function DepartureLine({ row: r }: { row: DepartureRow }) {
-  const [onTime, mid, late] = r.split;
   const cancelled = !!r.live?.cancelled;
   const body = (
     <>
@@ -194,11 +192,11 @@ function DepartureLine({ row: r }: { row: DepartureRow }) {
       </span>
       <span
         className="splash-split"
-        aria-label={`${pct(onTime)} on time, ${pct(mid)} 3 to 10 minutes late, ${pct(late)} more than 10 minutes late`}
+        aria-label={splitLabel(r.split)}
       >
-        <span style={{ width: pct(onTime), background: 'var(--good)' }} />
-        <span style={{ width: pct(mid), background: 'var(--split-mid)' }} />
-        <span style={{ width: pct(late), background: 'var(--bad)' }} />
+        {r.split.map((p, i) => (
+          <span key={i} style={{ width: pct(p), background: SPLIT_COLORS[i] }} />
+        ))}
       </span>
       <span className={`splash-dep-exp ${cancelled ? 'tone-bad' : toneClass(r.tone)}`}>{cancelled ? '✕' : r.typicalLabel}</span>
     </>
@@ -241,7 +239,7 @@ function Outlook({ s }: { s: SplashView }) {
         {s.bars.map((b, i) => (
           <div className="splash-bar" key={b.label}>
             <div className="splash-bar-pct">{pct(b.p)}</div>
-            <div className="splash-bar-fill" style={{ height: `${(b.p / max) * 78}%`, background: BAR_COLORS[i] }} />
+            <div className="splash-bar-fill" style={{ height: `${(b.p / max) * 78}%`, background: BUCKET_COLORS[i] }} />
           </div>
         ))}
       </div>
